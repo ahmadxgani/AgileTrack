@@ -344,6 +344,9 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                             </TableBody>
                         </Table>
 
+                        {/* One slot for every project_role rejection: add,
+                            role change and removal all report it here. The
+                            add-member form must not render a second copy. */}
                         <InputError message={errors.project_role} />
 
                         {can.manage_members && (
@@ -398,9 +401,6 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <InputError
-                                        message={addMember.errors.project_role}
-                                    />
                                 </div>
 
                                 <Button disabled={addMember.processing}>

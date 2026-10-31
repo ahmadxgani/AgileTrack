@@ -138,12 +138,16 @@ class ProjectController extends Controller
     /**
      * Show the form for editing a project.
      */
-    public function edit(Project $project): Response
+    public function edit(Project $project): Response|RedirectResponse
     {
         Gate::authorize('update', $project);
 
+        // The form has no field for this rejection, so a deep link to an
+        // archived project goes back to the page that can show the message.
         if ($project->isArchived()) {
-            throw ValidationException::withMessages(['name' => 'Archived projects are read only.']);
+            Inertia::flash('toast', ['type' => 'error', 'message' => 'Archived projects are read only.']);
+
+            return to_route('projects.show', $project);
         }
 
         return Inertia::render('projects/edit', [

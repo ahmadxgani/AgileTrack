@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\ProjectMembership;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -51,9 +52,12 @@ class ProjectMemberController extends Controller
     ): RedirectResponse {
         $this->ensureBelongsToProject($project, $membership);
         $this->ensureNotArchived($project);
-        $this->ensureAManagerRemains($project, $membership, $request->enum('project_role', ProjectRole::class));
 
-        $membership->update(['project_role' => $request->string('project_role')->toString()]);
+        DB::transaction(function () use ($request, $project, $membership): void {
+            $this->ensureAManagerRemains($project, $membership, $request->enum('project_role', ProjectRole::class));
+
+            $membership->update(['project_role' => $request->string('project_role')->toString()]);
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Member role updated.']);
 
@@ -69,9 +73,12 @@ class ProjectMemberController extends Controller
 
         $this->ensureBelongsToProject($project, $membership);
         $this->ensureNotArchived($project);
-        $this->ensureAManagerRemains($project, $membership, null);
 
-        $membership->delete();
+        DB::transaction(function () use ($project, $membership): void {
+            $this->ensureAManagerRemains($project, $membership, null);
+
+            $membership->delete();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Member removed.']);
 
@@ -104,12 +111,20 @@ class ProjectMemberController extends Controller
      * A project without a manager cannot be edited by anyone but an
      * administrator, so this keeps the project in the hands of its team.
      * Null means the row is being deleted rather than given a new role.
+     *
+     * Runs inside the caller's transaction, which locks the project row
+     * before re-reading the membership: without that, two concurrent
+     * demotions could each see the other manager and both succeed.
+     * SQLite ignores the lock, but it serialises writers anyway.
      */
     private function ensureAManagerRemains(
         Project $project,
         ProjectMembership $membership,
         ?ProjectRole $nextRole,
     ): void {
+        Project::query()->whereKey($project->getKey())->lockForUpdate()->firstOrFail();
+        $membership->refresh();
+
         if ($membership->project_role !== ProjectRole::Manager || $nextRole === ProjectRole::Manager) {
             return;
         }

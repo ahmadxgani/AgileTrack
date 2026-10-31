@@ -353,8 +353,14 @@ class ProjectWorkflowTest extends TestCase
         $admin = User::factory()->administrator()->create();
         $project = Project::factory()->archived()->create();
 
+        // The edit form has no field for this, so the deep link goes back to
+        // the show page with a message the page can render.
         $this->actingAs($admin)->get(route('projects.edit', $project))
-            ->assertSessionHasErrors('name');
+            ->assertRedirect(route('projects.show', $project))
+            ->assertInertiaFlash('toast', [
+                'type' => 'error',
+                'message' => 'Archived projects are read only.',
+            ]);
 
         $this->actingAs($admin)->get(route('projects.show', $project))->assertOk();
     }
