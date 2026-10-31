@@ -13,7 +13,12 @@ return new class extends Migration
     {
         Schema::create('sprints', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('project_id')->constrained()->cascadeOnDelete();
+            // Restrict, not cascade: a project that still holds sprints is
+            // not silently emptied. The pair with backlog_items.sprint_id,
+            // which also restricts, keeps the whole sprint chain safe under
+            // strict PostgreSQL, where a cascade that reaches a restricting
+            // child fails at a point the schema author never chose.
+            $table->foreignId('project_id')->constrained()->restrictOnDelete();
             $table->string('name');
             $table->text('goal')->nullable();
             // A sprint always runs between two known dates, so both are

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Sprints;
 
+use App\Enums\BacklogPriority;
 use App\Enums\BacklogStatus;
 use App\Enums\ProjectRole;
 use App\Enums\SprintStatus;
@@ -230,17 +231,64 @@ class SprintWorkflowTest extends TestCase
         $otherProject = Project::factory()->create();
         $manager = $this->member($project, ProjectRole::Manager);
         $foreign = Sprint::factory()->for($otherProject)->create();
+        $foreignItem = BacklogItem::factory()->for($otherProject)->create([
+            'sprint_id' => $foreign->id,
+        ]);
 
-        $this->actingAs($manager)->get(
-            route('sprints.show', [$project, $foreign]),
-        )->assertNotFound();
+        // Every verb resolves the sprint through the project in the URL, so
+        // one of another project is a 404 rather than a readable id.
+        $calls = [
+            'show' => fn () => $this->get(route('sprints.show', [$project, $foreign])),
+            'edit' => fn () => $this->get(route('sprints.edit', [$project, $foreign])),
+            'start' => fn () => $this->patch(route('sprints.start', [$project, $foreign])),
+            'close' => fn () => $this->patch(route('sprints.close', [$project, $foreign])),
+            'update' => fn () => $this->patch(route('sprints.update', [$project, $foreign]), [
+                'name' => 'Hijacked',
+                'starts_at' => '2026-11-02',
+                'ends_at' => '2026-11-15',
+            ]),
+            'items.store' => fn () => $this->post(
+                route('sprints.items.store', [$project, $foreign]),
+                ['backlog_item_id' => $foreignItem->id],
+            ),
+            'items.destroy' => fn () => $this->delete(
+                route('sprints.items.destroy', [$project, $foreign]),
+                ['backlog_item_id' => $foreignItem->id],
+            ),
+            'items.status' => fn () => $this->patch(
+                route('sprints.items.status', [$project, $foreign, $foreignItem]),
+                ['status' => BacklogStatus::Done->value],
+            ),
+        ];
+
+        foreach ($calls as $verb => $call) {
+            $this->actingAs($manager);
+
+            $call()->assertNotFound();
+        }
+
+        $foreign->refresh();
+
+        $this->assertSame(SprintStatus::Planned, $foreign->status);
+        $this->assertSame($foreign->id, $foreignItem->fresh()?->sprint_id);
+        $this->assertSame(BacklogStatus::Todo, $foreignItem->fresh()?->status);
+        $this->assertDatabaseCount('backlog_status_histories', 0);
+    }
+
+    public function test_a_closed_sprint_cannot_be_updated(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $sprint = Sprint::factory()->for($project)->closed()->create(['name' => 'Sprint 1']);
+
+        // Editing a closed sprint is refused on the write as well as the
+        // form, so the read-only rule does not hinge on a hidden button.
         $this->actingAs($manager)->patch(
-            route('sprints.update', [$project, $foreign]),
-            ['name' => 'Hijacked', 'starts_at' => '2026-11-02', 'ends_at' => '2026-11-15'],
-        )->assertNotFound();
-        $this->actingAs($manager)->patch(
-            route('sprints.close', [$project, $foreign]),
-        )->assertNotFound();
+            route('sprints.update', [$project, $sprint]),
+            ['name' => 'Renamed', 'starts_at' => '2026-11-02', 'ends_at' => '2026-11-15'],
+        )->assertForbidden();
+
+        $this->assertSame('Sprint 1', $sprint->fresh()?->name);
     }
 
     public function test_members_view_sprints_and_viewers_change_nothing(): void
@@ -436,6 +484,47 @@ class SprintWorkflowTest extends TestCase
                 ->where('can.update', true));
     }
 
+    /**
+     * An archived item stays in its sprint: the board is the only place its
+     * manager can take it back out, and the deletion of a sprint with work is
+     * restricted, so hiding it would strand it. The list must count it too,
+     * or the number would promise less work than the link opens.
+     */
+    public function test_the_sprint_list_counts_every_planned_item(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $sprint = Sprint::factory()->for($project)->create();
+
+        BacklogItem::factory()->for($project)->count(2)->create(['sprint_id' => $sprint->id]);
+        // Lowest priority, so it sorts last and its slot is predictable.
+        $archived = BacklogItem::factory()->for($project)->archived()->create([
+            'sprint_id' => $sprint->id,
+            'priority' => BacklogPriority::Low,
+        ]);
+
+        $this->actingAs($manager)->get(route('sprints.index', $project))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('sprints/index')
+                ->has('sprints', 1)
+                ->where('sprints.0.items', 3));
+
+        $this->actingAs($manager)->get(route('sprints.show', [$project, $sprint]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('board.todo', 3)
+                ->where('board.todo.2.can_move_status', false));
+
+        // It cannot be moved, but it can still leave the sprint.
+        $this->actingAs($manager)->delete(
+            route('sprints.items.destroy', [$project, $sprint]),
+            ['backlog_item_id' => $archived->id],
+        )->assertRedirect();
+
+        $this->assertNull($archived->fresh()?->sprint_id);
+    }
+
     public function test_a_dates_only_update_keeps_the_name_and_goal(): void
     {
         $project = Project::factory()->create();
@@ -539,6 +628,19 @@ class SprintWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('sprints', ['id' => $sprint->id]);
         $this->assertSame($sprint->id, $item->fresh()?->sprint_id);
+    }
+
+    public function test_deleting_a_project_with_sprints_is_restricted(): void
+    {
+        $project = Project::factory()->create();
+        $sprint = Sprint::factory()->for($project)->active()->create();
+
+        // The project, sprint and item links all restrict, so a delete never
+        // half-cascades through the sprint chain.
+        $this->assertThrows(fn () => $project->delete(), QueryException::class);
+
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
+        $this->assertDatabaseHas('sprints', ['id' => $sprint->id]);
     }
 
     public function test_the_sidebar_shortcut_opens_a_readable_project(): void

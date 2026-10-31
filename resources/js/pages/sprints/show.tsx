@@ -18,7 +18,6 @@ import { index as projectsIndex, show as projectShow } from '@/routes/projects';
 export type KanbanCard = {
     id: number;
     title: string;
-    priority: string;
     priority_label: string;
     assignees: { id: number; name: string }[];
     can_move_status: boolean;
@@ -147,10 +146,10 @@ export default function SprintsShow({
                     </div>
                 </div>
 
-                {/* One slot for every sprint-level rejection: start, close and
-                    item changes all report it here. */}
+                {/* Sprint-level rejections: starting or closing the sprint,
+                    and adding or removing work. A rejected status move is
+                    shown on its own card instead. */}
                 <InputError message={errors.sprint} />
-                <InputError message={errors.status} />
                 <InputError message={errors.backlog_item_id} />
 
                 <KanbanBoard

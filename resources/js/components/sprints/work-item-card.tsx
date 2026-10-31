@@ -1,5 +1,6 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,6 +37,12 @@ export default function WorkItemCard({
     onRemove,
 }: Props) {
     const [pending, setPending] = useState('');
+
+    const { errors } = usePage().props;
+    // A rejected move is keyed by card, so the message lands on the control
+    // that was used and not on some other card or the top of the page.
+    const error = errors[`items.${card.id}.status`];
+    const errorId = `status-error-${card.id}`;
 
     function move(status: string) {
         setPending(status);
@@ -79,29 +86,37 @@ export default function WorkItemCard({
                     )}
 
                     {card.can_move_status && (
-                        <Select
-                            value={pending}
-                            onValueChange={move}
-                            disabled={pending !== ''}
-                        >
-                            <SelectTrigger
-                                size="sm"
-                                className="w-full"
-                                aria-label={`Move ${card.title}`}
+                        <div className="space-y-1">
+                            <Select
+                                value={pending}
+                                onValueChange={move}
+                                disabled={pending !== ''}
                             >
-                                <SelectValue placeholder="Move to..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {statuses.map((status) => (
-                                    <SelectItem
-                                        key={status.value}
-                                        value={status.value}
-                                    >
-                                        {status.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                <SelectTrigger
+                                    size="sm"
+                                    className="w-full"
+                                    aria-label={`Move ${card.title}`}
+                                    aria-invalid={Boolean(error)}
+                                    aria-describedby={
+                                        error ? errorId : undefined
+                                    }
+                                >
+                                    <SelectValue placeholder="Move to..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {statuses.map((status) => (
+                                        <SelectItem
+                                            key={status.value}
+                                            value={status.value}
+                                        >
+                                            {status.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <InputError id={errorId} message={error} />
+                        </div>
                     )}
                 </CardContent>
             </Card>

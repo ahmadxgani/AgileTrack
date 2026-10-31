@@ -54,6 +54,10 @@ class SprintController extends Controller
         Gate::authorize('viewAny', [Sprint::class, $project]);
 
         $sprints = $project->sprints()
+            // Counts every planned item, archived ones included, because the
+            // board shows them too: an archived card is the only place its
+            // manager can take it back out of the sprint, so it stays visible
+            // and the list must not promise less work than the link opens.
             ->withCount('backlogItems')
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
@@ -113,16 +117,25 @@ class SprintController extends Controller
     {
         Gate::authorize('viewAny', [Sprint::class, $project]);
 
+        // Every card is authorized, and each check reads the project role and
+        // the assignees. Loading both once and handing the same project to
+        // every item keeps the page at a fixed number of queries instead of
+        // one or two per card.
+        $project->loadMissing('memberships');
+
+        $sprint->setRelation('project', $project);
+
         $items = $sprint->backlogItems()
             ->with('assignees:id,name')
             ->ordered()
-            ->get();
+            ->get()
+            ->each(fn (BacklogItem $item) => $item->setRelation('project', $project));
 
         $pool = $project->backlogItems()
             ->whereNull('sprint_id')
             ->whereNull('archived_at')
             ->ordered()
-            ->get(['id', 'title', 'priority', 'status']);
+            ->get(['id', 'title', 'priority']);
 
         return Inertia::render('sprints/show', [
             'project' => $this->projectPayload($project),
@@ -332,15 +345,47 @@ class SprintController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $item->transitionStatus(
-                $request->enum('status', BacklogStatus::class),
-                $request->user(),
-            );
+            try {
+                $item->transitionStatus(
+                    $request->enum('status', BacklogStatus::class),
+                    $request->user(),
+                );
+            } catch (ValidationException $exception) {
+                // The board shows a rejected move on the card that was moved,
+                // so the message is also keyed by that item and the page can
+                // place it. The plain key stays, because the JSON callers and
+                // the backlog page read it.
+                throw ValidationException::withMessages([
+                    ...$exception->errors(),
+                    ...$this->keyedByItem($exception->errors(), $item->id),
+                ]);
+            }
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Status updated.']);
 
         return to_route('sprints.show', [$project, $sprint]);
+    }
+
+    /**
+     * Re-key validation errors so each one names the item it belongs to.
+     *
+     * The board rejects a move on one card, so the page needs to know which
+     * card to blame; `status` alone could only be printed at the top of the
+     * page, away from the control that was used.
+     *
+     * @param  array<string, array<int, string>>  $errors
+     * @return array<string, array<int, string>>
+     */
+    private function keyedByItem(array $errors, int $itemId): array
+    {
+        $keyed = [];
+
+        foreach ($errors as $key => $messages) {
+            $keyed["items.{$itemId}.{$key}"] = $messages;
+        }
+
+        return $keyed;
     }
 
     /**
@@ -396,7 +441,6 @@ class SprintController extends Controller
             $columns[$item->status->value][] = [
                 'id' => $item->id,
                 'title' => $item->title,
-                'priority' => $item->priority->value,
                 'priority_label' => $item->priority->label(),
                 'assignees' => $item->assignees
                     ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->name])

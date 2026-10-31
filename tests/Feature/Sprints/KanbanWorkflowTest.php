@@ -13,6 +13,7 @@ use App\Models\Sprint;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -484,6 +485,85 @@ class KanbanWorkflowTest extends TestCase
 
         $this->assertSame(BacklogStatus::Todo, $item->fresh()?->status);
         $this->assertDatabaseCount('backlog_status_histories', 0);
+    }
+
+    /**
+     * The board authorizes every card, so a page load must cost the same
+     * whatever the number of cards: one query per card would make a long
+     * sprint crawl.
+     */
+    public function test_a_rejected_move_names_the_card_that_was_moved(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $sprint = Sprint::factory()->for($project)->closed()->create();
+        $first = BacklogItem::factory()->for($project)->create(['sprint_id' => $sprint->id]);
+        $second = BacklogItem::factory()->for($project)->create(['sprint_id' => $sprint->id]);
+
+        $this->actingAs($manager)->patch(
+            route('sprints.items.status', [$project, $sprint, $second]),
+            ['status' => BacklogStatus::Done->value],
+        )->assertSessionHasErrors(['status', "items.{$second->id}.status"])
+            ->assertSessionDoesntHaveErrors("items.{$first->id}.status");
+
+        // The board page renders both keys, so the card can show the message
+        // next to its own control instead of the page showing it at the top.
+        $this->actingAs($manager)->get(route('sprints.show', [$project, $sprint]))
+            ->assertOk();
+    }
+
+    public function test_the_board_costs_the_same_however_many_cards(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $teammate = $this->member($project, ProjectRole::Member);
+        $sprint = Sprint::factory()->for($project)->active()->create();
+
+        $only = BacklogItem::factory()->for($project)->create(['sprint_id' => $sprint->id]);
+        $only->assignees()->attach($teammate->id);
+
+        // One warm-up load first: the role lookup of an account is remembered
+        // on the user object, so the first request of a session carries a
+        // query the later ones do not, whatever the board holds.
+        $this->countBoardQueries($manager, $project, $sprint);
+        $this->countBoardQueries($teammate, $project, $sprint);
+
+        $managerOne = $this->countBoardQueries($manager, $project, $sprint);
+        $teammateOne = $this->countBoardQueries($teammate, $project, $sprint);
+
+        $more = BacklogItem::factory()->for($project)->count(9)->create([
+            'sprint_id' => $sprint->id,
+        ]);
+        $more->each(fn (BacklogItem $item) => $item->assignees()->attach($teammate->id));
+
+        $managerTen = $this->countBoardQueries($manager, $project, $sprint);
+        $teammateTen = $this->countBoardQueries($teammate, $project, $sprint);
+
+        $this->assertSame(
+            $managerOne,
+            $managerTen,
+            'A manager load costs one query per card: '.$managerOne.' for 1 card, '.$managerTen.' for 10.',
+        );
+        $this->assertSame(
+            $teammateOne,
+            $teammateTen,
+            'A member load costs one query per card: '.$teammateOne.' for 1 card, '.$teammateTen.' for 10.',
+        );
+    }
+
+    private function countBoardQueries(User $user, Project $project, Sprint $sprint): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->actingAs($user)->get(route('sprints.show', [$project, $sprint]))
+            ->assertOk();
+
+        $count = count(DB::getQueryLog());
+
+        DB::disableQueryLog();
+
+        return $count;
     }
 
     private function member(Project $project, ProjectRole $role): User
