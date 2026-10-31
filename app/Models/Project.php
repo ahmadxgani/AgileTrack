@@ -69,6 +69,19 @@ class Project extends Model
     }
 
     /**
+     * Get the backlog items of the project.
+     *
+     * Named so a scoped route binding resolves an item only inside this
+     * project, and an item of another project gives a 404.
+     *
+     * @return HasMany<BacklogItem, $this>
+     */
+    public function backlogItems(): HasMany
+    {
+        return $this->hasMany(BacklogItem::class);
+    }
+
+    /**
      * Determine whether the project is archived, and therefore read only.
      */
     public function isArchived(): bool
