@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -97,7 +98,23 @@ class UserController extends Controller
         Gate::authorize('update', $user);
 
         DB::transaction(function () use ($request, $user): void {
-            $user->fill([
+            // The account row is locked before its roles are read, so two
+            // administrators demoting each other at the same moment queue up
+            // instead of both seeing the other and both succeeding.
+            $account = User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+
+            // Both checks exist for the same rule at different moments. The
+            // request rule runs before the transaction and answers with a
+            // friendly message; this one runs under the account lock and is
+            // the authoritative gate, because a concurrent administrator's
+            // demotion blocks on the row lock and commits between the two.
+            $this->ensureAnActiveAdministratorRemains(
+                $account,
+                $request->boolean('is_active')
+                    && in_array(UserRole::Administrator->value, (array) $request->input('roles', []), true),
+            );
+
+            $account->fill([
                 'name' => $request->string('name')->toString(),
                 'email' => $request->string('email')->toString(),
                 'is_active' => $request->boolean('is_active'),
@@ -105,17 +122,41 @@ class UserController extends Controller
 
             // Admin-managed accounts stay verified until email delivery exists.
             if ($request->filled('password')) {
-                $user->password = $request->string('password')->toString();
+                $account->password = $request->string('password')->toString();
             }
 
-            $user->save();
+            $account->save();
 
-            $this->syncRoles($user, $request->array('roles'));
+            $this->syncRoles($account, $request->array('roles'));
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Account updated.']);
 
         return to_route('admin.users.edit', $user);
+    }
+
+    /**
+     * Refuse a change that would leave the system without an active
+     * administrator.
+     *
+     * The caller holds the account row lock, so the read below cannot miss a
+     * role or status change another administrator is writing right now. This
+     * is the authoritative check; the request rule only produces the friendly
+     * message before the transaction starts.
+     *
+     * @throws ValidationException
+     */
+    private function ensureAnActiveAdministratorRemains(User $account, bool $remainsActiveAdministrator): void
+    {
+        if ($remainsActiveAdministrator) {
+            return;
+        }
+
+        if ($account->isLastActiveAdministrator()) {
+            throw ValidationException::withMessages([
+                'roles' => 'The system must keep at least one active administrator.',
+            ]);
+        }
     }
 
     /**

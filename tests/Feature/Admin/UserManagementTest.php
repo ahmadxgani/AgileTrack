@@ -4,7 +4,9 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -307,6 +309,42 @@ class UserManagementTest extends TestCase
         ])->assertSessionHasErrors('roles');
 
         $this->assertTrue($admin->refresh()->load('roles')->hasRole(UserRole::Administrator));
+    }
+
+    public function test_last_active_administrator_cannot_drop_either_role_or_status_under_the_lock(): void
+    {
+        $admin = User::factory()->administrator()->create();
+        $other = User::factory()->administrator()->create();
+
+        // Between the request rule and the transaction, the other
+        // administrator demotes themselves. Under PostgreSQL their request
+        // would take this row's lock; here the row is simply reloaded from
+        // the database, which is the state the locked read then sees.
+        DB::listen(function (QueryExecuted $query) use ($other): void {
+            if (! str_starts_with($query->sql, 'select * from "users" where "id" = ?')) {
+                return;
+            }
+
+            DB::listen(fn (): null => null);
+            User::query()->whereKey($other->id)->update(['is_active' => false]);
+        });
+
+        $this->actingAs($admin)->patch(route('admin.users.update', $admin), [
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'roles' => [UserRole::TeamMember->value],
+            'is_active' => true,
+        ])->assertSessionHasErrors('roles');
+
+        $admin->refresh()->load('roles');
+        $this->assertTrue($admin->hasRole(UserRole::Administrator));
+
+        $activeAdministrators = User::query()
+            ->where('is_active', true)
+            ->whereHas('roles', fn ($query) => $query->where('role', UserRole::Administrator->value))
+            ->count();
+
+        $this->assertSame(1, $activeAdministrators);
     }
 
     public function test_account_creation_uses_the_configured_password_policy(): void
