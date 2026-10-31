@@ -340,6 +340,11 @@ class SprintController extends Controller
         DB::transaction(function () use ($request, $sprint, $backlogItem): void {
             $locked = $this->lockSprint($sprint);
 
+            // Every other sprint write re-authorizes the locked sprint, this
+            // one does not: a card move is authorized by the item's own
+            // updateStatus policy inside transitionStatus below. The sprint
+            // policy governs planning and closing, not moves, so checking it
+            // here would only repeat what the item policy already decides.
             $item = $locked->backlogItems()
                 ->whereKey($backlogItem->getKey())
                 ->lockForUpdate()
