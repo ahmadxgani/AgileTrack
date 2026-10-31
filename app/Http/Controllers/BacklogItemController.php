@@ -160,11 +160,20 @@ class BacklogItemController extends Controller
         BacklogItem $backlogItem,
     ): RedirectResponse {
         DB::transaction(function () use ($request, $backlogItem): void {
+            $status = $request->enum('status', BacklogStatus::class);
+
+            // The form edits the status too, so it writes the same history
+            // row as the Kanban board instead of bypassing the log. It runs
+            // first because it takes the row locks in the shared order
+            // (project, sprint, item); editing the item first would hold the
+            // item lock while asking for the project one, against the board.
+            // Resubmitting the current status is not a move, so it is quiet.
+            $backlogItem->transitionStatus($status, $request->user(), rejectUnchanged: false);
+
             $backlogItem->update([
                 'title' => $request->string('title')->toString(),
                 'description' => $request->input('description'),
                 'priority' => $request->enum('priority', BacklogPriority::class),
-                'status' => $request->enum('status', BacklogStatus::class),
             ]);
 
             // Absent means "leave the assignment alone"; an empty list clears it.
@@ -188,7 +197,10 @@ class BacklogItemController extends Controller
         Project $project,
         BacklogItem $backlogItem,
     ): RedirectResponse {
-        $backlogItem->update(['status' => $request->enum('status', BacklogStatus::class)]);
+        $backlogItem->transitionStatus(
+            $request->enum('status', BacklogStatus::class),
+            $request->user(),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Status updated.']);
 

@@ -82,6 +82,19 @@ class Project extends Model
     }
 
     /**
+     * Get the sprints of the project.
+     *
+     * Named so a scoped route binding resolves a sprint only inside this
+     * project, and a sprint of another project gives a 404.
+     *
+     * @return HasMany<Sprint, $this>
+     */
+    public function sprints(): HasMany
+    {
+        return $this->hasMany(Sprint::class);
+    }
+
+    /**
      * Determine whether the project is archived, and therefore read only.
      */
     public function isArchived(): bool
