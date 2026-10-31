@@ -15,9 +15,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        if (app()->isProduction()) {
+            return;
+        }
 
-        User::factory()->create([
+        // Development-only administrator so a fresh clone can sign in and
+        // manage accounts. Never seed this in production.
+        User::factory()->administrator()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
