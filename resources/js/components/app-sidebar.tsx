@@ -4,6 +4,7 @@ import {
     FolderGit2,
     FolderKanban,
     LayoutGrid,
+    ListChecks,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -22,6 +23,7 @@ import {
 import { dashboard } from '@/routes';
 import { index as adminUsers } from '@/routes/admin/users';
 import { index as projects } from '@/routes/projects';
+import { shortcut as backlogShortcut } from '@/routes/projects/backlog';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -34,6 +36,11 @@ const mainNavItems: NavItem[] = [
         title: 'Projects',
         href: projects(),
         icon: FolderKanban,
+    },
+    {
+        title: 'Backlog',
+        href: backlogShortcut(),
+        icon: ListChecks,
     },
 ];
 

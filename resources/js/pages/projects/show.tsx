@@ -28,6 +28,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { index as backlogIndex } from '@/routes/projects/backlog';
 import { archive, edit as editRoute, index, show } from '@/routes/projects';
 import { destroy, store, update } from '@/routes/projects/members';
 
@@ -141,6 +142,10 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={backlogIndex(project.id)}>Backlog</Link>
+                        </Button>
+
                         {can.update && !project.archived_at && (
                             <Button variant="outline" asChild>
                                 <Link href={editRoute(project.id)}>Edit</Link>

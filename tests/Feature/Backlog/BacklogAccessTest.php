@@ -184,6 +184,20 @@ class BacklogAccessTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_sidebar_shortcut_opens_a_readable_backlog(): void
+    {
+        $project = Project::factory()->create(['name' => 'Alpha']);
+        $manager = $this->member($project, ProjectRole::Manager);
+
+        $this->actingAs($manager)->get(route('projects.backlog.shortcut'))
+            ->assertRedirect(route('projects.backlog.index', $project));
+
+        $stranger = User::factory()->create();
+
+        $this->actingAs($stranger)->get(route('projects.backlog.shortcut'))
+            ->assertRedirect(route('projects.index'));
+    }
+
     private function member(Project $project, ProjectRole $role): User
     {
         $user = User::factory()->create();

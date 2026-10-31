@@ -11,6 +11,7 @@ use App\Models\BacklogItem;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +20,28 @@ use Inertia\Response;
 
 class BacklogItemController extends Controller
 {
+    /**
+     * Open the backlog of a project the user may read.
+     *
+     * The sidebar has no project in its URL, so this picks the first
+     * visible one and falls back to the project list when there is none.
+     */
+    public function shortcut(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null, 403);
+
+        $project = Project::query()
+            ->visibleTo($user)
+            ->orderBy('name')
+            ->first();
+
+        return $project === null
+            ? to_route('projects.index')
+            : to_route('projects.backlog.index', $project);
+    }
+
     /**
      * List the backlog of the project.
      */

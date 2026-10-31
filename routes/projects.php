@@ -9,6 +9,9 @@ Route::middleware(['auth', 'verified'])->prefix('projects')->group(function () {
     Route::get('/', [ProjectController::class, 'index'])->name('projects.index');
     Route::get('create', [ProjectController::class, 'create'])->name('projects.create');
     Route::post('/', [ProjectController::class, 'store'])->name('projects.store');
+    // Sidebar entry, registered before {project} so the literal never binds
+    // as a project id.
+    Route::get('backlog', [BacklogItemController::class, 'shortcut'])->name('projects.backlog.shortcut');
     Route::get('{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::get('{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit');
     Route::patch('{project}', [ProjectController::class, 'update'])->name('projects.update');
