@@ -5,7 +5,8 @@ Inertia 3 + React 19 + TypeScript + Tailwind 4, with Fortify authentication.
 
 ## Prerequisites
 
-- PHP 8.5 with the `pdo_sqlite` extension (and `pdo_pgsql` for deployment)
+- PHP 8.3 or newer (8.5 tested), with the `pdo_sqlite` extension for local
+  development and `pdo_pgsql` for deployment
 - Composer 2
 - Node.js 26 and npm
 
@@ -17,9 +18,15 @@ cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite
 php artisan migrate
+php artisan db:seed
 npm install
 npm run build
 ```
+
+`php artisan db:seed` creates the local demo account
+`test@example.com` / `password` from
+`database/seeders/DatabaseSeeder.php`. That account is for development only
+and must never be seeded in production.
 
 ## Development
 
@@ -62,7 +69,11 @@ Then run `php artisan migrate --force`.
 
 ## Authentication
 
-Public registration is disabled. Accounts are created by an administrator.
+Public registration is disabled, so nobody can create an account from the
+login page. Admin account management is not implemented yet: the first account
+comes from `php artisan db:seed` (local demo account) or from
+`php artisan tinker`, for example
+`App\Models\User::factory()->create(['email' => 'you@example.com'])`.
 Login, logout, password reset, email verification and two-factor
 authentication remain available.
 
