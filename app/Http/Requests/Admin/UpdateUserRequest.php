@@ -2,17 +2,30 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
 class UpdateUserRequest extends FormRequest
 {
-    use ProfileValidationRules;
+    use PasswordValidationRules, ProfileValidationRules;
+
+    /**
+     * Determine whether the user is allowed to make this request.
+     *
+     * Checked before validation so a non-administrator always gets 403,
+     * never a 422 that reveals the validation rules.
+     */
+    public function authorize(): bool
+    {
+        return (bool) $this->user()?->is_administrator;
+    }
 
     /**
      * Get the validation rules that apply to the request.
@@ -26,7 +39,8 @@ class UpdateUserRequest extends FormRequest
 
         return [
             ...$this->profileRules($account->id),
-            'password' => ['nullable', 'string', 'min:8'],
+            // Optional here: a blank password keeps the current one.
+            'password' => ['nullable', 'string', Password::default(), 'confirmed'],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => [Rule::enum(UserRole::class)],
             'is_active' => ['required', 'boolean'],
@@ -47,12 +61,14 @@ class UpdateUserRequest extends FormRequest
 
                 if (! $this->boolean('is_active') && $account->is($this->user())) {
                     $validator->errors()->add('is_active', 'You cannot deactivate your own account.');
+
+                    return;
                 }
 
                 $keepsActiveAdministrator = $this->boolean('is_active')
                     && in_array(UserRole::Administrator->value, (array) $this->input('roles', []), true);
 
-                if (! $keepsActiveAdministrator && $this->isLastActiveAdministrator($account)) {
+                if (! $keepsActiveAdministrator && $account->isLastActiveAdministrator()) {
                     $validator->errors()->add(
                         'roles',
                         'The system must keep at least one active administrator.',
@@ -60,24 +76,6 @@ class UpdateUserRequest extends FormRequest
                 }
             },
         ];
-    }
-
-    /**
-     * Determine whether the account is the only active administrator left.
-     */
-    private function isLastActiveAdministrator(User $account): bool
-    {
-        $isActiveAdministrator = $account->is_active
-            && $account->roles()->where('role', UserRole::Administrator->value)->exists();
-
-        if (! $isActiveAdministrator) {
-            return false;
-        }
-
-        return User::query()
-            ->where('is_active', true)
-            ->whereHas('roles', fn ($query) => $query->where('role', UserRole::Administrator->value))
-            ->count() === 1;
     }
 
     /**

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import RoleOptions, { type RoleOption } from '@/components/admin/role-options';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,15 +11,17 @@ import { create as createRoute, index, store } from '@/routes/admin/users';
 
 type Props = {
     roles: RoleOption[];
+    passwordRules: string;
 };
 
-export default function UsersCreate({ roles }: Props) {
+export default function UsersCreate({ roles, passwordRules }: Props) {
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
     const form = useForm({
         name: '',
         email: '',
         password: '',
+        password_confirmation: '',
         roles: [] as string[],
     });
 
@@ -78,22 +81,43 @@ export default function UsersCreate({ roles }: Props) {
 
                     <div className="grid gap-2">
                         <Label htmlFor="password">Password</Label>
-                        <Input
+                        <PasswordInput
                             id="password"
-                            type="password"
                             value={form.data.password}
                             onChange={(event) =>
                                 form.setData('password', event.target.value)
                             }
                             required
-                            minLength={8}
                             autoComplete="new-password"
+                            passwordrules={passwordRules}
                         />
                         <p className="text-sm text-muted-foreground">
                             Share this password with the account holder through
                             a secure channel. No email is sent.
                         </p>
                         <InputError message={form.errors.password} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="password_confirmation">
+                            Confirm password
+                        </Label>
+                        <PasswordInput
+                            id="password_confirmation"
+                            value={form.data.password_confirmation}
+                            onChange={(event) =>
+                                form.setData(
+                                    'password_confirmation',
+                                    event.target.value,
+                                )
+                            }
+                            required
+                            autoComplete="new-password"
+                            passwordrules={passwordRules}
+                        />
+                        <InputError
+                            message={form.errors.password_confirmation}
+                        />
                     </div>
 
                     <RoleOptions

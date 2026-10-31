@@ -3,6 +3,7 @@ import { useState } from 'react';
 import RoleOptions, { type RoleOption } from '@/components/admin/role-options';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,9 +23,10 @@ import type { AdminUser } from './index';
 type Props = {
     user: AdminUser;
     roles: RoleOption[];
+    passwordRules: string;
 };
 
-export default function UsersEdit({ user, roles }: Props) {
+export default function UsersEdit({ user, roles, passwordRules }: Props) {
     const [selectedRoles, setSelectedRoles] = useState<string[]>(
         user.roles.map((role) => role.value),
     );
@@ -34,6 +36,7 @@ export default function UsersEdit({ user, roles }: Props) {
         name: user.name,
         email: user.email,
         password: '',
+        password_confirmation: '',
         roles: user.roles.map((role) => role.value),
         is_active: user.is_active,
     });
@@ -101,20 +104,40 @@ export default function UsersEdit({ user, roles }: Props) {
                         <Label htmlFor="password">
                             New password (optional)
                         </Label>
-                        <Input
+                        <PasswordInput
                             id="password"
-                            type="password"
                             value={form.data.password}
                             onChange={(event) =>
                                 form.setData('password', event.target.value)
                             }
-                            minLength={8}
                             autoComplete="new-password"
+                            passwordrules={passwordRules}
                         />
                         <p className="text-sm text-muted-foreground">
                             Leave blank to keep the current password.
                         </p>
                         <InputError message={form.errors.password} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="password_confirmation">
+                            Confirm new password
+                        </Label>
+                        <PasswordInput
+                            id="password_confirmation"
+                            value={form.data.password_confirmation}
+                            onChange={(event) =>
+                                form.setData(
+                                    'password_confirmation',
+                                    event.target.value,
+                                )
+                            }
+                            autoComplete="new-password"
+                            passwordrules={passwordRules}
+                        />
+                        <InputError
+                            message={form.errors.password_confirmation}
+                        />
                     </div>
 
                     <RoleOptions
@@ -194,7 +217,7 @@ export default function UsersEdit({ user, roles }: Props) {
     );
 }
 
-UsersEdit.layout = {
+UsersEdit.layout = (props: Props) => ({
     breadcrumbs: [
         {
             title: 'Users',
@@ -202,7 +225,7 @@ UsersEdit.layout = {
         },
         {
             title: 'Edit account',
-            href: editRoute(0),
+            href: editRoute(props.user.id),
         },
     ],
-};
+});

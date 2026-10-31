@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -43,6 +44,7 @@ class UserController extends Controller
 
         return Inertia::render('admin/users/create', [
             'roles' => $this->roleOptions(),
+            'passwordRules' => Password::defaults()->toPasswordRulesString(),
         ]);
     }
 
@@ -83,6 +85,7 @@ class UserController extends Controller
         return Inertia::render('admin/users/edit', [
             'user' => $this->toRow($user->load('roles')),
             'roles' => $this->roleOptions(),
+            'passwordRules' => Password::defaults()->toPasswordRulesString(),
         ]);
     }
 
@@ -100,10 +103,7 @@ class UserController extends Controller
                 'is_active' => $request->boolean('is_active'),
             ]);
 
-            if ($user->isDirty('email')) {
-                $user->email_verified_at = null;
-            }
-
+            // Admin-managed accounts stay verified until email delivery exists.
             if ($request->filled('password')) {
                 $user->password = $request->string('password')->toString();
             }

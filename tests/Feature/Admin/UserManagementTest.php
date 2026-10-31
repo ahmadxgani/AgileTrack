@@ -34,6 +34,7 @@ class UserManagementTest extends TestCase
             'name' => 'New Person',
             'email' => 'New.Person@example.com',
             'password' => 'secret-password',
+            'password_confirmation' => 'secret-password',
             'roles' => [UserRole::TeamMember->value, UserRole::QaEngineer->value],
         ]);
 
@@ -56,6 +57,7 @@ class UserManagementTest extends TestCase
             'name' => 'New Person',
             'email' => 'new.person@example.com',
             'password' => 'secret-password',
+            'password_confirmation' => 'secret-password',
             'roles' => [UserRole::Customer->value],
         ]);
 
@@ -152,12 +154,102 @@ class UserManagementTest extends TestCase
     {
         $user = User::factory()->inactive()->create();
 
-        $this->post(route('login.store'), [
+        $this->from(route('login'))->post(route('login.store'), [
             'email' => $user->email,
             'password' => 'password',
-        ]);
+        ])->assertRedirect(route('login'))->assertSessionHasErrors('email');
 
         $this->assertGuest();
+    }
+
+    public function test_guests_are_redirected_to_the_login_page_from_admin_routes(): void
+    {
+        $target = User::factory()->create();
+
+        $this->get(route('admin.users.index'))->assertRedirect(route('login'));
+        $this->get(route('admin.users.create'))->assertRedirect(route('login'));
+        $this->get(route('admin.users.edit', $target))->assertRedirect(route('login'));
+        $this->post(route('admin.users.store'))->assertRedirect(route('login'));
+        $this->patch(route('admin.users.update', $target))->assertRedirect(route('login'));
+
+        $this->assertGuest();
+    }
+
+    public function test_account_creation_rejects_an_unknown_role(): void
+    {
+        $admin = User::factory()->administrator()->create();
+
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'New Person',
+            'email' => 'new.person@example.com',
+            'password' => 'secret-password',
+            'roles' => ['chief_robot'],
+        ])->assertSessionHasErrors('roles.0');
+
+        $this->assertDatabaseMissing('users', ['email' => 'new.person@example.com']);
+    }
+
+    public function test_sole_active_administrator_cannot_delete_their_own_account(): void
+    {
+        $admin = User::factory()->administrator()->create();
+
+        $this->actingAs($admin)->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ])->assertSessionHasErrors('password');
+
+        $this->assertModelExists($admin->refresh());
+        $this->assertAuthenticatedAs($admin);
+
+        // With a second active administrator, deletion is allowed again.
+        User::factory()->administrator()->create();
+        $adminId = $admin->id;
+
+        $this->actingAs($admin)->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('users', ['id' => $adminId]);
+    }
+
+    public function test_non_administrator_gets_403_even_with_an_invalid_payload(): void
+    {
+        $member = User::factory()->create();
+        $target = User::factory()->create();
+
+        // Authorize before validate: the answer must be 403, not 422.
+        $this->actingAs($member)->post(route('admin.users.store'), [
+            'name' => '',
+            'email' => 'not-an-email',
+            'password' => 'short',
+            'roles' => ['chief_robot'],
+        ])->assertForbidden();
+
+        $this->actingAs($member)->patch(route('admin.users.update', $target), [
+            'name' => '',
+            'email' => 'not-an-email',
+            'password' => 'short',
+            'roles' => ['chief_robot'],
+            'is_active' => 'maybe',
+        ])->assertForbidden();
+    }
+
+    public function test_administrator_can_change_an_account_email_without_losing_verification(): void
+    {
+        $admin = User::factory()->administrator()->create();
+        $member = User::factory()->create();
+
+        $this->actingAs($admin)->patch(route('admin.users.update', $member), [
+            'name' => $member->name,
+            'email' => 'moved@example.com',
+            'roles' => [UserRole::TeamMember->value],
+            'is_active' => true,
+        ])->assertSessionHasNoErrors();
+
+        $member->refresh();
+        $this->assertSame('moved@example.com', $member->email);
+        $this->assertTrue($member->hasVerifiedEmail());
+
+        $this->actingAs($member)->get(route('dashboard'))->assertOk();
     }
 
     public function test_last_active_administrator_cannot_deactivate_themselves(): void
@@ -167,9 +259,9 @@ class UserManagementTest extends TestCase
         $this->actingAs($admin)->patch(route('admin.users.update', $admin), [
             'name' => $admin->name,
             'email' => $admin->email,
-            'roles' => [UserRole::Administrator->value],
+            'roles' => [UserRole::TeamMember->value],
             'is_active' => false,
-        ])->assertSessionHasErrors('is_active');
+        ])->assertSessionHasErrors('is_active')->assertSessionDoesntHaveErrors('roles');
 
         $this->assertTrue($admin->refresh()->is_active);
     }
@@ -205,12 +297,51 @@ class UserManagementTest extends TestCase
         $admin = User::factory()->administrator()->create();
         User::factory()->administrator()->inactive()->create();
 
+        // The inactive administrator must not make dropping this role look
+        // safe: no active administrator would be left.
         $this->actingAs($admin)->patch(route('admin.users.update', $admin), [
             'name' => $admin->name,
             'email' => $admin->email,
-            'roles' => [UserRole::Administrator->value],
-            'is_active' => false,
-        ])->assertSessionHasErrors('is_active');
+            'roles' => [UserRole::TeamMember->value],
+            'is_active' => true,
+        ])->assertSessionHasErrors('roles');
+
+        $this->assertTrue($admin->refresh()->load('roles')->hasRole(UserRole::Administrator));
+    }
+
+    public function test_account_creation_uses_the_configured_password_policy(): void
+    {
+        $admin = User::factory()->administrator()->create();
+
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'New Person',
+            'email' => 'new.person@example.com',
+            'password' => 'short',
+            'password_confirmation' => 'short',
+            'roles' => [UserRole::TeamMember->value],
+        ])->assertSessionHasErrors('password');
+
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'New Person',
+            'email' => 'new.person@example.com',
+            'password' => 'secret-password',
+            'password_confirmation' => 'different-password',
+            'roles' => [UserRole::TeamMember->value],
+        ])->assertSessionHasErrors('password');
+
+        $this->assertDatabaseMissing('users', ['email' => 'new.person@example.com']);
+    }
+
+    public function test_administrator_flag_is_shared_with_the_frontend(): void
+    {
+        $admin = User::factory()->administrator()->create();
+        $member = User::factory()->create();
+
+        $this->actingAs($admin)->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('auth.user.is_administrator', true));
+
+        $this->actingAs($member)->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('auth.user.is_administrator', false));
     }
 
     public function test_account_creation_requires_at_least_one_role(): void
@@ -221,6 +352,7 @@ class UserManagementTest extends TestCase
             'name' => 'New Person',
             'email' => 'new.person@example.com',
             'password' => 'secret-password',
+            'password_confirmation' => 'secret-password',
             'roles' => [],
         ])->assertSessionHasErrors('roles');
 
