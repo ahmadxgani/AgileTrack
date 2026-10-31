@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\ProjectMembership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class BacklogAccessTest extends TestCase
@@ -182,6 +183,43 @@ class BacklogAccessTest extends TestCase
             ->assertOk();
         $this->actingAs($owner)->get(route('projects.backlog.create', $project))
             ->assertForbidden();
+    }
+
+    public function test_removing_a_member_clears_their_assignments_in_this_project(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $teammate = $this->member($project, ProjectRole::Member);
+        $item = BacklogItem::factory()->for($project)->create();
+        $item->assignees()->attach($teammate->id);
+
+        $otherProject = Project::factory()->create();
+        $otherItem = BacklogItem::factory()->for($otherProject)->create();
+        $otherItem->assignees()->attach($teammate->id);
+
+        $membership = ProjectMembership::query()
+            ->where('project_id', $project->id)
+            ->where('user_id', $teammate->id)
+            ->sole();
+
+        $this->actingAs($manager)->delete(
+            route('projects.members.destroy', [$project, $membership]),
+        )->assertRedirect(route('projects.show', $project));
+
+        $this->assertDatabaseMissing('backlog_item_user', [
+            'backlog_item_id' => $item->id,
+            'user_id' => $teammate->id,
+        ]);
+
+        // The same person's assignment in another project is untouched.
+        $this->assertDatabaseHas('backlog_item_user', [
+            'backlog_item_id' => $otherItem->id,
+            'user_id' => $teammate->id,
+        ]);
+
+        $this->actingAs($manager)->get(route('projects.backlog.index', $project))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('items.0.assignees', 0));
     }
 
     public function test_sidebar_shortcut_opens_a_readable_backlog(): void

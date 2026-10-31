@@ -77,6 +77,14 @@ class ProjectMemberController extends Controller
         DB::transaction(function () use ($project, $membership): void {
             $this->ensureAManagerRemains($project, $membership, null);
 
+            // A removed member must stop being an assignee of this project's
+            // backlog: otherwise their name stays on the item and the row
+            // silently comes back if they are added again.
+            DB::table('backlog_item_user')
+                ->where('user_id', $membership->user_id)
+                ->whereIn('backlog_item_id', $project->backlogItems()->select('id'))
+                ->delete();
+
             $membership->delete();
         });
 
