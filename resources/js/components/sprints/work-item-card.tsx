@@ -39,8 +39,8 @@ export default function WorkItemCard({
     const [pending, setPending] = useState('');
 
     const { errors } = usePage().props;
-    // A rejected move is keyed by card, so the message lands on the control
-    // that was used and not on some other card or the top of the page.
+    // A rejected move is keyed by card, so the message lands on the card that
+    // was used and not on some other card or the top of the page.
     const error = errors[`items.${card.id}.status`];
     const errorId = `status-error-${card.id}`;
 
@@ -86,38 +86,39 @@ export default function WorkItemCard({
                     )}
 
                     {card.can_move_status && (
-                        <div className="space-y-1">
-                            <Select
-                                value={pending}
-                                onValueChange={move}
-                                disabled={pending !== ''}
+                        <Select
+                            value={pending}
+                            onValueChange={move}
+                            disabled={pending !== ''}
+                        >
+                            <SelectTrigger
+                                size="sm"
+                                className="w-full"
+                                aria-label={`Move ${card.title}`}
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={error ? errorId : undefined}
                             >
-                                <SelectTrigger
-                                    size="sm"
-                                    className="w-full"
-                                    aria-label={`Move ${card.title}`}
-                                    aria-invalid={Boolean(error)}
-                                    aria-describedby={
-                                        error ? errorId : undefined
-                                    }
-                                >
-                                    <SelectValue placeholder="Move to..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {statuses.map((status) => (
-                                        <SelectItem
-                                            key={status.value}
-                                            value={status.value}
-                                        >
-                                            {status.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <InputError id={errorId} message={error} />
-                        </div>
+                                <SelectValue placeholder="Move to..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {statuses.map((status) => (
+                                    <SelectItem
+                                        key={status.value}
+                                        value={status.value}
+                                    >
+                                        {status.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     )}
+
+                    {/* Outside the can_move_status gate on purpose. A sprint
+                        closed after the page loaded refreshes this card
+                        without the status control, and the rejection must
+                        still say why the move failed instead of leaving the
+                        control gone and unexplained. */}
+                    <InputError id={errorId} message={error} />
                 </CardContent>
             </Card>
         </li>

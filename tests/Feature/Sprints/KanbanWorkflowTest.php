@@ -512,6 +512,50 @@ class KanbanWorkflowTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * A sprint may close between the page load and the move. The refreshed
+     * board then hides the control, so the rejection must still travel back
+     * with the item it belongs to or the member sees it disappear.
+     */
+    public function test_a_sprint_closed_after_the_page_loaded_still_explains_the_rejection(): void
+    {
+        $project = Project::factory()->create();
+        $member = $this->member($project, ProjectRole::Member);
+        $manager = $this->member($project, ProjectRole::Manager);
+        $sprint = Sprint::factory()->for($project)->active()->create();
+        $item = BacklogItem::factory()->for($project)->create(['sprint_id' => $sprint->id]);
+        $item->assignees()->attach($member->id);
+
+        // The board offered the control when the page was rendered.
+        $this->actingAs($member)->get(route('sprints.show', [$project, $sprint]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('board.todo.0.can_move_status', true));
+
+        $this->actingAs($manager)->patch(route('sprints.close', [$project, $sprint]))
+            ->assertRedirect();
+
+        $this->actingAs($member)->patch(
+            route('sprints.items.status', [$project, $sprint, $item]),
+            ['status' => BacklogStatus::Done->value],
+        )->assertRedirect(route('sprints.show', [$project, $sprint]))
+            ->assertSessionHasErrors([
+                'status',
+                "items.{$item->id}.status",
+            ]);
+
+        // The refreshed board no longer offers the move. The card renders its
+        // own key whether or not the control survived the refresh, which
+        // `resources/js/components/sprints/work-item-card.test.tsx` covers:
+        // this test pins the server half of that contract, the render test
+        // pins the half a follow-up GET cannot show, since a new request
+        // starts with an empty error bag.
+        $this->actingAs($member)->get(route('sprints.show', [$project, $sprint]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('board.todo.0.can_move_status', false));
+    }
+
     public function test_the_board_costs_the_same_however_many_cards(): void
     {
         $project = Project::factory()->create();
