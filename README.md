@@ -23,10 +23,13 @@ npm install
 npm run build
 ```
 
-`php artisan db:seed` creates the local demo account
+`php artisan db:seed` creates the local demo administrator
 `test@example.com` / `password` from
-`database/seeders/DatabaseSeeder.php`. That account is for development only
-and must never be seeded in production.
+`database/seeders/DatabaseSeeder.php`. That account is for development only,
+must never be seeded in production (the seeder returns early when
+`APP_ENV=production`), and is the only way to reach the user management pages
+at `/admin/users`: there is no public registration, so administrators create
+every other account from there.
 
 ## Development
 
@@ -70,12 +73,13 @@ Then run `php artisan migrate --force`.
 ## Authentication
 
 Public registration is disabled, so nobody can create an account from the
-login page. Admin account management is not implemented yet: the first account
-comes from `php artisan db:seed` (local demo account) or from
-`php artisan tinker`, for example
-`App\Models\User::factory()->create(['email' => 'you@example.com'])`.
+login page. The first administrator comes from `php artisan db:seed` (local
+demo account, development only). That administrator manages every other
+account, its roles and its access status from `/admin/users`; accounts are
+created with an administrator-entered password and no email is sent.
 Login, logout, password reset, email verification and two-factor
-authentication remain available.
+authentication remain available. An inactive account cannot sign in, and an
+administrator cannot deactivate the last active administrator.
 
 Password reset email in development goes to the log
 (`MAIL_MAILER=log`); check `storage/logs/laravel.log` for the reset link.
