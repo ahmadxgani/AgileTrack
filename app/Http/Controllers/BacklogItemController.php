@@ -14,7 +14,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -59,7 +58,6 @@ class BacklogItemController extends Controller
             ->map(fn (BacklogItem $item): array => [
                 'id' => $item->id,
                 'title' => $item->title,
-                'description' => $item->description,
                 'priority' => $item->priority->value,
                 'priority_label' => $item->priority->label(),
                 'status' => $item->status->value,
@@ -203,10 +201,6 @@ class BacklogItemController extends Controller
     public function archive(Project $project, BacklogItem $backlogItem): RedirectResponse
     {
         Gate::authorize('archive', $backlogItem);
-
-        if ($backlogItem->isArchived()) {
-            throw ValidationException::withMessages(['title' => 'This item is already archived.']);
-        }
 
         $backlogItem->forceFill(['archived_at' => now()])->save();
 

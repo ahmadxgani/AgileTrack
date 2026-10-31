@@ -37,7 +37,6 @@ import { index as projectsIndex, show as projectShow } from '@/routes/projects';
 export type BacklogRow = {
     id: number;
     title: string;
-    description: string | null;
     priority: string;
     priority_label: string;
     status: string;

@@ -185,6 +185,43 @@ class BacklogAccessTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_store_ignores_a_project_or_creator_in_the_body(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $otherProject = Project::factory()->create();
+        $otherUser = User::factory()->create();
+
+        $this->actingAs($manager)->post(route('projects.backlog.store', $project), [
+            'title' => 'Scoped',
+            'priority' => BacklogPriority::Low->value,
+            'status' => BacklogStatus::Todo->value,
+            'project_id' => $otherProject->id,
+            'created_by' => $otherUser->id,
+        ])->assertRedirect();
+
+        $item = BacklogItem::query()->sole();
+
+        $this->assertSame($project->id, $item->project_id);
+        $this->assertSame($manager->id, $item->created_by);
+    }
+
+    public function test_the_same_assignee_twice_is_rejected(): void
+    {
+        $project = Project::factory()->create();
+        $manager = $this->member($project, ProjectRole::Manager);
+        $teammate = $this->member($project, ProjectRole::Member);
+
+        $this->actingAs($manager)->post(route('projects.backlog.store', $project), [
+            'title' => 'Doubled',
+            'priority' => BacklogPriority::Low->value,
+            'status' => BacklogStatus::Todo->value,
+            'assignees' => [$teammate->id, $teammate->id],
+        ])->assertSessionHasErrors(['assignees.0', 'assignees.1']);
+
+        $this->assertDatabaseCount('backlog_items', 0);
+    }
+
     public function test_removing_a_member_clears_their_assignments_in_this_project(): void
     {
         $project = Project::factory()->create();
@@ -220,6 +257,22 @@ class BacklogAccessTest extends TestCase
         $this->actingAs($manager)->get(route('projects.backlog.index', $project))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('items.0.assignees', 0));
+    }
+
+    public function test_viewer_sees_no_change_permission_on_the_index(): void
+    {
+        $project = Project::factory()->create();
+        $viewer = $this->member($project, ProjectRole::Viewer);
+        $item = BacklogItem::factory()->for($project)->create();
+        $item->assignees()->attach($viewer->id);
+
+        $this->actingAs($viewer)->get(route('projects.backlog.index', $project))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('can.create', false)
+                ->where('items.0.can.update', false)
+                ->where('items.0.can.update_status', false)
+                ->where('items.0.can.archive', false));
     }
 
     public function test_sidebar_shortcut_opens_a_readable_backlog(): void

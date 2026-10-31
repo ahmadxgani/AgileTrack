@@ -114,9 +114,17 @@ class BacklogItem extends Model
      */
     public function scopeOrdered(Builder $query): void
     {
-        $query->orderByRaw(
-            'case priority when ? then 4 when ? then 3 when ? then 2 else 1 end desc',
-            [BacklogPriority::Urgent->value, BacklogPriority::High->value, BacklogPriority::Medium->value],
-        )->orderByDesc('created_at')->orderByDesc('id');
+        $cases = [];
+        $bindings = [];
+
+        foreach (BacklogPriority::cases() as $priority) {
+            $cases[] = 'when ? then ?';
+            $bindings[] = $priority->value;
+            $bindings[] = $priority->weight();
+        }
+
+        $query->orderByRaw('case priority '.implode(' ', $cases).' end desc', $bindings)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
     }
 }
