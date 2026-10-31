@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProjectRole;
 use App\Http\Requests\Projects\StoreProjectMemberRequest;
 use App\Http\Requests\Projects\UpdateProjectMemberRequest;
 use App\Models\Project;
@@ -50,6 +51,7 @@ class ProjectMemberController extends Controller
     ): RedirectResponse {
         $this->ensureBelongsToProject($project, $membership);
         $this->ensureNotArchived($project);
+        $this->ensureAManagerRemains($project, $membership, $request->enum('project_role', ProjectRole::class));
 
         $membership->update(['project_role' => $request->string('project_role')->toString()]);
 
@@ -67,6 +69,7 @@ class ProjectMemberController extends Controller
 
         $this->ensureBelongsToProject($project, $membership);
         $this->ensureNotArchived($project);
+        $this->ensureAManagerRemains($project, $membership, null);
 
         $membership->delete();
 
@@ -91,6 +94,34 @@ class ProjectMemberController extends Controller
         if ($project->isArchived()) {
             throw ValidationException::withMessages([
                 'project_role' => 'Archived projects are read only.',
+            ]);
+        }
+    }
+
+    /**
+     * Reject demoting or removing the last manager of a project.
+     *
+     * A project without a manager cannot be edited by anyone but an
+     * administrator, so this keeps the project in the hands of its team.
+     * Null means the row is being deleted rather than given a new role.
+     */
+    private function ensureAManagerRemains(
+        Project $project,
+        ProjectMembership $membership,
+        ?ProjectRole $nextRole,
+    ): void {
+        if ($membership->project_role !== ProjectRole::Manager || $nextRole === ProjectRole::Manager) {
+            return;
+        }
+
+        $otherManagers = $project->memberships()
+            ->whereKeyNot($membership->id)
+            ->where('project_role', ProjectRole::Manager->value)
+            ->exists();
+
+        if (! $otherManagers) {
+            throw ValidationException::withMessages([
+                'project_role' => 'A project needs at least one manager.',
             ]);
         }
     }

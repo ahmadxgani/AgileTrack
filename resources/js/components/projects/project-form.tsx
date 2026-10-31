@@ -10,6 +10,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { store, update } from '@/routes/projects';
 
 export type ProjectFormValues = {
@@ -65,14 +66,13 @@ export default function ProjectForm({ project, statuses }: Props) {
 
             <div className="grid gap-2">
                 <Label htmlFor="description">Description</Label>
-                <textarea
+                <Textarea
                     id="description"
                     value={form.data.description}
                     onChange={(event) =>
                         form.setData('description', event.target.value)
                     }
                     rows={4}
-                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                     aria-invalid={Boolean(form.errors.description)}
                     aria-describedby={
                         form.errors.description

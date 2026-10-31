@@ -92,9 +92,11 @@ class ProjectController extends Controller
      */
     public function show(Project $project): Response
     {
-        Gate::authorize('view', $project);
-
+        // Loaded before the policy runs so the policy can read the viewer's
+        // row from the relation instead of issuing its own query.
         $project->load(['memberships.user', 'creator']);
+
+        Gate::authorize('view', $project);
 
         return Inertia::render('projects/show', [
             'project' => [
@@ -139,6 +141,10 @@ class ProjectController extends Controller
     public function edit(Project $project): Response
     {
         Gate::authorize('update', $project);
+
+        if ($project->isArchived()) {
+            throw ValidationException::withMessages(['name' => 'Archived projects are read only.']);
+        }
 
         return Inertia::render('projects/edit', [
             'project' => [

@@ -63,12 +63,14 @@ class ProjectPolicy
     }
 
     /**
-     * Get the project role the user holds, without loading every member.
+     * Get the project role the user holds, reusing the loaded relation.
      */
     private function roleOf(User $user, Project $project): ?ProjectRole
     {
-        return $project->memberships()
-            ->where('user_id', $user->id)
-            ->value('project_role');
+        if (! $project->relationLoaded('memberships')) {
+            $project->load('memberships');
+        }
+
+        return $project->memberships->firstWhere('user_id', $user->id)?->project_role;
     }
 }

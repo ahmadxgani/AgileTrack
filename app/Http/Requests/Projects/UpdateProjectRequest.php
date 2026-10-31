@@ -8,7 +8,6 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 class UpdateProjectRequest extends FormRequest
 {
@@ -40,40 +39,12 @@ class UpdateProjectRequest extends FormRequest
     }
 
     /**
-     * Configure the validator instance.
-     *
-     * A partial update may send only one of the two dates, so the pair is
-     * also checked against the stored value of the other one.
-     *
-     * @return array<int, callable(Validator): void>
-     */
-    public function after(): array
-    {
-        return [
-            function (Validator $validator): void {
-                if ($validator->errors()->hasAny(['starts_at', 'ends_at'])) {
-                    return;
-                }
-
-                /** @var Project $project */
-                $project = $this->route('project');
-
-                $startsAt = $this->exists('starts_at')
-                    ? $this->input('starts_at')
-                    : $project->starts_at?->format('Y-m-d');
-                $endsAt = $this->exists('ends_at')
-                    ? $this->input('ends_at')
-                    : $project->ends_at?->format('Y-m-d');
-
-                if ($startsAt !== null && $endsAt !== null && $endsAt < $startsAt) {
-                    $validator->errors()->add('ends_at', 'The end date must not be before the start date.');
-                }
-            },
-        ];
-    }
-
-    /**
      * Normalize the input before validation.
+     *
+     * A partial update may send only one of the two dates. The stored
+     * counterpart is merged in so the after_or_equal rule always compares
+     * two real dates, in both directions and whatever format the client
+     * sends.
      */
     protected function prepareForValidation(): void
     {
@@ -81,5 +52,16 @@ class UpdateProjectRequest extends FormRequest
             fn ($value) => $value === '' ? null : $value,
             $this->only(['description', 'starts_at', 'ends_at']),
         ));
+
+        /** @var Project $project */
+        $project = $this->route('project');
+
+        if (! $this->exists('starts_at')) {
+            $this->merge(['starts_at' => $project->starts_at?->format('Y-m-d')]);
+        }
+
+        if (! $this->exists('ends_at')) {
+            $this->merge(['ends_at' => $project->ends_at?->format('Y-m-d')]);
+        }
     }
 }

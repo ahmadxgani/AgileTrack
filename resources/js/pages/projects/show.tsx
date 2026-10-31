@@ -61,11 +61,21 @@ type Props = {
 
 export default function ProjectsShow({ project, roles, can }: Props) {
     const [confirmingArchive, setConfirmingArchive] = useState(false);
+    const [confirmingRemoval, setConfirmingRemoval] = useState<number | null>(
+        null,
+    );
+    // Role changes are optimistic; a failed request falls back to the value
+    // the server last sent, which the Select cannot do on its own.
+    const [pendingRoles, setPendingRoles] = useState<Record<number, string>>(
+        {},
+    );
     const { errors } = usePage().props;
+
+    const memberRole = roles.find((role) => role.value === 'member');
 
     const addMember = useForm({
         email: '',
-        project_role: roles[1]?.value ?? 'member',
+        project_role: memberRole?.value ?? roles[0]?.value ?? 'member',
     });
 
     function submitMember(event: React.FormEvent) {
@@ -77,16 +87,33 @@ export default function ProjectsShow({ project, roles, can }: Props) {
     }
 
     function changeRole(member: ProjectMember, value: string) {
+        setPendingRoles((current) => ({
+            ...current,
+            [member.membership_id]: value,
+        }));
+
         router.patch(
             update([project.id, member.membership_id]).url,
             { project_role: value },
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                // The choice shows immediately; once the request settles the
+                // server value takes over again, so a rejected change reverts.
+                onFinish: () =>
+                    setPendingRoles((current) => {
+                        const next = { ...current };
+                        delete next[member.membership_id];
+
+                        return next;
+                    }),
+            },
         );
     }
 
     function removeMember(member: ProjectMember) {
         router.delete(destroy([project.id, member.membership_id]).url, {
             preserveScroll: true,
+            onFinish: () => setConfirmingRemoval(null),
         });
     }
 
@@ -231,7 +258,11 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                                         <TableCell>
                                             {can.manage_members ? (
                                                 <Select
-                                                    value={member.project_role}
+                                                    value={
+                                                        pendingRoles[
+                                                            member.membership_id
+                                                        ] ?? member.project_role
+                                                    }
                                                     onValueChange={(value) =>
                                                         changeRole(
                                                             member,
@@ -239,7 +270,10 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                                                         )
                                                     }
                                                 >
-                                                    <SelectTrigger size="sm">
+                                                    <SelectTrigger
+                                                        size="sm"
+                                                        aria-label={`Project role for ${member.name}`}
+                                                    >
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -263,15 +297,46 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                                         </TableCell>
                                         {can.manage_members && (
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        removeMember(member)
-                                                    }
-                                                >
-                                                    Remove
-                                                </Button>
+                                                {confirmingRemoval ===
+                                                member.membership_id ? (
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            aria-label={`Confirm removing ${member.name}`}
+                                                            onClick={() =>
+                                                                removeMember(
+                                                                    member,
+                                                                )
+                                                            }
+                                                        >
+                                                            Confirm
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                setConfirmingRemoval(
+                                                                    null,
+                                                                )
+                                                            }
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setConfirmingRemoval(
+                                                                member.membership_id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                )}
                                             </TableCell>
                                         )}
                                     </TableRow>
@@ -279,12 +344,7 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                             </TableBody>
                         </Table>
 
-                        <InputError
-                            message={
-                                errors.project_role ??
-                                addMember.errors.project_role
-                            }
-                        />
+                        <InputError message={errors.project_role} />
 
                         {can.manage_members && (
                             <form

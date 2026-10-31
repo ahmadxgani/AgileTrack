@@ -156,17 +156,51 @@ class ProjectWorkflowTest extends TestCase
             'ends_at' => '2026-05-20',
         ]);
 
+        $payload = ['name' => $project->name, 'status' => ProjectStatus::Active->value];
+
+        // Only the end date, before the stored start date.
         $this->actingAs($admin)->patch(route('projects.update', $project), [
-            'name' => $project->name,
+            ...$payload,
             'ends_at' => '2026-05-01',
-            'status' => ProjectStatus::Active->value,
         ])->assertSessionHasErrors('ends_at');
 
+        // Only the start date, after the stored end date.
         $this->actingAs($admin)->patch(route('projects.update', $project), [
-            'name' => $project->name,
+            ...$payload,
+            'starts_at' => '2026-05-25',
+        ])->assertSessionHasErrors('ends_at');
+
+        // Non-ISO input is parsed as a date, not compared as a string: this
+        // one sorts after the stored start lexically but is a month before.
+        $this->actingAs($admin)->patch(route('projects.update', $project), [
+            ...$payload,
+            'ends_at' => 'May 1 2026',
+        ])->assertSessionHasErrors('ends_at');
+
+        $this->assertSame('2026-05-10', $project->fresh()?->starts_at?->format('Y-m-d'));
+        $this->assertSame('2026-05-20', $project->fresh()?->ends_at?->format('Y-m-d'));
+
+        // Each direction still accepts a valid single date.
+        $this->actingAs($admin)->patch(route('projects.update', $project), [
+            ...$payload,
+            'ends_at' => '2026-06-01',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->patch(route('projects.update', $project), [
+            ...$payload,
+            'starts_at' => '2026-05-01',
+        ])->assertSessionHasNoErrors();
+
+        // A non-ISO start before the stored end is accepted too.
+        $this->actingAs($admin)->patch(route('projects.update', $project), [
+            ...$payload,
+            'starts_at' => 'May 2 2026',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->patch(route('projects.update', $project), [
+            ...$payload,
             'starts_at' => '2026-05-10',
             'ends_at' => null,
-            'status' => ProjectStatus::Active->value,
         ])->assertSessionHasNoErrors();
 
         $this->assertNull($project->fresh()?->ends_at);
@@ -247,6 +281,82 @@ class ProjectWorkflowTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseMissing('project_memberships', ['user_id' => $target->id]);
+    }
+
+    public function test_member_and_viewer_memberships_cannot_change_or_remove_members(): void
+    {
+        $project = Project::factory()->create();
+        $target = ProjectMembership::factory()->for($project)->member()->create();
+
+        foreach ([ProjectRole::Member, ProjectRole::Viewer] as $role) {
+            $actor = User::factory()->create();
+            ProjectMembership::factory()->for($project)->for($actor)->create([
+                'project_role' => $role,
+            ]);
+
+            $this->actingAs($actor)->patch(
+                route('projects.members.update', [$project, $target]),
+                ['project_role' => ProjectRole::Viewer->value],
+            )->assertForbidden();
+
+            $this->actingAs($actor)->delete(
+                route('projects.members.destroy', [$project, $target]),
+            )->assertForbidden();
+
+            $this->assertSame(ProjectRole::Member, $target->fresh()?->project_role);
+        }
+    }
+
+    public function test_last_manager_cannot_be_demoted_or_removed(): void
+    {
+        $project = Project::factory()->create();
+        $manager = User::factory()->create();
+        $manager->roles()->create(['role' => UserRole::TeamMember]);
+        $own = ProjectMembership::factory()->for($project)->for($manager)->create();
+
+        // A member cannot demote themselves into leaving the project unmanaged.
+        $this->actingAs($manager)->patch(
+            route('projects.members.update', [$project, $own]),
+            ['project_role' => ProjectRole::Member->value],
+        )->assertSessionHasErrors('project_role');
+
+        $this->assertSame(ProjectRole::Manager, $own->fresh()?->project_role);
+
+        $this->actingAs($manager)->delete(
+            route('projects.members.destroy', [$project, $own]),
+        )->assertSessionHasErrors('project_role');
+
+        $this->assertDatabaseHas('project_memberships', ['id' => $own->id]);
+
+        // With a second manager the demotion is fine.
+        $second = ProjectMembership::factory()->for($project)->create();
+
+        $this->actingAs($manager)->patch(
+            route('projects.members.update', [$project, $own]),
+            ['project_role' => ProjectRole::Member->value],
+        )->assertRedirect(route('projects.show', $project));
+
+        $this->assertSame(ProjectRole::Member, $own->fresh()?->project_role);
+
+        // The remaining manager can now be neither demoted nor removed.
+        $administrator = User::factory()->administrator()->create();
+
+        $this->actingAs($administrator)->delete(
+            route('projects.members.destroy', [$project, $second]),
+        )->assertSessionHasErrors('project_role');
+
+        $this->assertDatabaseHas('project_memberships', ['id' => $second->id]);
+    }
+
+    public function test_archived_project_cannot_be_edited_through_the_form(): void
+    {
+        $admin = User::factory()->administrator()->create();
+        $project = Project::factory()->archived()->create();
+
+        $this->actingAs($admin)->get(route('projects.edit', $project))
+            ->assertSessionHasErrors('name');
+
+        $this->actingAs($admin)->get(route('projects.show', $project))->assertOk();
     }
 
     public function test_show_page_lists_members_and_flags_the_viewer_can_manage_them(): void
