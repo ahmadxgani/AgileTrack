@@ -13,6 +13,7 @@ use App\Models\ProjectMembership;
 use App\Models\Sprint;
 use App\Models\SprintReview;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -338,6 +339,31 @@ class ReviewWorkflowTest extends TestCase
             ->assertRedirect(route('projects.reviews.index', $project));
         $this->actingAs(User::factory()->create())->get(route('projects.reviews.shortcut'))
             ->assertRedirect(route('projects.index'));
+    }
+
+    public function test_a_decision_is_reauthorized_in_the_transaction_and_rolls_back(): void
+    {
+        $project = Project::factory()->create();
+        $member = $this->member($project, ProjectRole::Member);
+        $review = SprintReview::factory()->for($project)->create();
+
+        // A plain member fails the decide policy. The gate runs inside the
+        // transaction, after the locked reads, so the whole decision must
+        // roll back: no follow-up item, no decided_by or decided_at.
+        try {
+            $review->recordDecision(ReviewDecision::NeedsChanges, $member, 'A follow-up item');
+            $this->fail('A plain project member must not decide a review.');
+        } catch (AuthorizationException) {
+            // Expected: the in-transaction gate is the authoritative check.
+        }
+
+        $fresh = SprintReview::query()->findOrFail($review->getKey());
+
+        $this->assertSame(ReviewDecision::Pending, $fresh->decision);
+        $this->assertNull($fresh->decided_by);
+        $this->assertNull($fresh->decided_at);
+        $this->assertNull($fresh->follow_up_backlog_item_id);
+        $this->assertSame(0, $project->backlogItems()->count());
     }
 
     private function member(Project $project, ProjectRole $role): User
