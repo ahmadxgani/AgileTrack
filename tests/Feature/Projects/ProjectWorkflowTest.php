@@ -8,7 +8,9 @@ use App\Enums\UserRole;
 use App\Models\Project;
 use App\Models\ProjectMembership;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -344,6 +346,44 @@ class ProjectWorkflowTest extends TestCase
         $this->actingAs($administrator)->delete(
             route('projects.members.destroy', [$project, $second]),
         )->assertSessionHasErrors('project_role');
+
+        $this->assertDatabaseHas('project_memberships', ['id' => $second->id]);
+    }
+
+    public function test_removing_a_membership_another_manager_already_removed_reports_a_validation_error(): void
+    {
+        $project = Project::factory()->create();
+        $target = ProjectMembership::factory()->for($project)->member()->create();
+        $second = ProjectMembership::factory()->for($project)->create();
+        $actor = $second->user;
+
+        // Another manager removes the row after the route binding resolved
+        // it but before the guard re-reads it. RefreshDatabase wraps the test
+        // in one transaction, so the controller's own DB::transaction is a
+        // nested level 2; the route binding reads the project at level 1.
+        // Deleting right after the guard's locked project read (level 2) and
+        // before its membership re-read makes that re-read return null. The
+        // refresh() this replaces raised ModelNotFoundException, a 404; the
+        // locked re-read reports the project_role message instead.
+        $deleted = false;
+        DB::listen(function (QueryExecuted $query) use ($target, &$deleted): void {
+            if ($deleted
+                || DB::transactionLevel() < 2
+                || ! str_contains($query->sql, 'from "projects"')) {
+                return;
+            }
+
+            $deleted = true;
+            DB::table('project_memberships')->where('id', $target->id)->delete();
+        });
+
+        // Not a 404: the row existed when the route bound it and when the
+        // guard was entered, and the clean message is keyed on project_role.
+        // The redirect target is the browser's referer, absent in tests.
+        $this->actingAs($actor)->delete(
+            route('projects.members.destroy', [$project, $target]),
+        )->assertRedirect()
+            ->assertSessionHasErrors('project_role');
 
         $this->assertDatabaseHas('project_memberships', ['id' => $second->id]);
     }

@@ -131,14 +131,25 @@ class ProjectMemberController extends Controller
         ?ProjectRole $nextRole,
     ): void {
         Project::query()->whereKey($project->getKey())->lockForUpdate()->firstOrFail();
-        $membership->refresh();
 
-        if ($membership->project_role !== ProjectRole::Manager || $nextRole === ProjectRole::Manager) {
+        // Re-read under the project lock rather than refresh(): another
+        // manager may have removed this row between the route binding and
+        // this transaction, and refresh() would raise a bare
+        // ModelNotFoundException (a 404) instead of a clean message.
+        $current = $project->memberships()->whereKey($membership->getKey())->lockForUpdate()->first();
+
+        if ($current === null) {
+            throw ValidationException::withMessages([
+                'project_role' => 'That member is no longer in this project.',
+            ]);
+        }
+
+        if ($current->project_role !== ProjectRole::Manager || $nextRole === ProjectRole::Manager) {
             return;
         }
 
         $otherManagers = $project->memberships()
-            ->whereKeyNot($membership->id)
+            ->whereKeyNot($current->id)
             ->where('project_role', ProjectRole::Manager->value)
             ->exists();
 
