@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
     CalendarRange,
+    ClipboardCheck,
     FolderGit2,
     FolderKanban,
     LayoutGrid,
@@ -25,6 +26,7 @@ import { dashboard } from '@/routes';
 import { index as adminUsers } from '@/routes/admin/users';
 import { index as projects } from '@/routes/projects';
 import { shortcut as backlogShortcut } from '@/routes/projects/backlog';
+import { shortcut as reviewsShortcut } from '@/routes/projects/reviews';
 import { shortcut as sprintsShortcut } from '@/routes/sprints';
 import type { NavItem } from '@/types';
 
@@ -50,6 +52,12 @@ const mainNavItems: NavItem[] = [
         href: sprintsShortcut(),
         icon: CalendarRange,
         match: '/sprints',
+    },
+    {
+        title: 'Reviews',
+        href: reviewsShortcut(),
+        icon: ClipboardCheck,
+        match: '/reviews',
     },
 ];
 

@@ -1,26 +1,155 @@
-import { Head } from '@inertiajs/react';
-import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
+import { Head, Link } from '@inertiajs/react';
+import Heading from '@/components/heading';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { dashboard } from '@/routes';
+import { show as projectShow } from '@/routes/projects';
+import { index as reviewsIndex } from '@/routes/projects/reviews';
 
-export default function Dashboard() {
+export type DashboardProject = {
+    id: number;
+    name: string;
+    status: string;
+    status_label: string;
+    archived_at: string | null;
+    active_sprint: string | null;
+    next_review_at: string | null;
+    counts: { todo: number; in_progress: number; done: number };
+};
+
+type Props = {
+    projects: DashboardProject[];
+    summary: { projects: number };
+};
+
+function formatDate(value: string | null): string {
+    if (!value) {
+        return 'None scheduled';
+    }
+
+    return new Date(value).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    });
+}
+
+export default function Dashboard({ projects, summary }: Props) {
     return (
         <>
             <Head title="Dashboard" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-                <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
+
+            <div className="space-y-6 p-4">
+                <Heading
+                    title="Dashboard"
+                    description={`${summary.projects} ${summary.projects === 1 ? 'project' : 'projects'} you can see`}
+                />
+
+                {projects.length === 0 ? (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>No projects yet</CardTitle>
+                            <CardDescription>
+                                You are not a member of any project yet. Ask a
+                                project manager to add you.
+                            </CardDescription>
+                        </CardHeader>
+                    </Card>
+                ) : (
+                    <div className="rounded-xl border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Project</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Active sprint</TableHead>
+                                    <TableHead className="text-right">
+                                        To do
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        In progress
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        Done
+                                    </TableHead>
+                                    <TableHead>Next review</TableHead>
+                                    <TableHead />
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {projects.map((project) => (
+                                    <TableRow key={project.id}>
+                                        <TableCell className="font-medium">
+                                            <Link
+                                                href={projectShow(project.id)}
+                                                className="hover:underline"
+                                            >
+                                                {project.name}
+                                            </Link>
+                                            {project.archived_at && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="ml-2"
+                                                >
+                                                    Archived
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary">
+                                                {project.status_label}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {project.active_sprint ??
+                                                'No active sprint'}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {project.counts.todo}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {project.counts.in_progress}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {project.counts.done}
+                                        </TableCell>
+                                        <TableCell>
+                                            {formatDate(project.next_review_at)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={reviewsIndex(
+                                                        project.id,
+                                                    )}
+                                                >
+                                                    Reviews
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                    </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                    </div>
-                </div>
-                <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                </div>
+                )}
             </div>
         </>
     );

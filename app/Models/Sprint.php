@@ -71,6 +71,16 @@ class Sprint extends Model
     }
 
     /**
+     * Get the reviews that covered the sprint.
+     *
+     * @return HasMany<SprintReview, $this>
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(SprintReview::class);
+    }
+
+    /**
      * Determine whether the sprint is closed, and therefore read only.
      */
     public function isClosed(): bool

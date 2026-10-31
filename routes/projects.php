@@ -3,6 +3,7 @@
 use App\Http\Controllers\BacklogItemController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectMemberController;
+use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SprintController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,6 +15,7 @@ Route::middleware(['auth', 'verified'])->prefix('projects')->group(function () {
     // as a project id.
     Route::get('backlog', [BacklogItemController::class, 'shortcut'])->name('projects.backlog.shortcut');
     Route::get('sprints', [SprintController::class, 'shortcut'])->name('sprints.shortcut');
+    Route::get('reviews', [ReviewController::class, 'shortcut'])->name('projects.reviews.shortcut');
     Route::get('{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::get('{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit');
     Route::patch('{project}', [ProjectController::class, 'update'])->name('projects.update');
@@ -53,5 +55,17 @@ Route::middleware(['auth', 'verified'])->prefix('projects')->group(function () {
         Route::post('{sprint}/items', [SprintController::class, 'addItem'])->name('items.store');
         Route::delete('{sprint}/items', [SprintController::class, 'removeItem'])->name('items.destroy');
         Route::patch('{sprint}/items/{backlogItem}/status', [SprintController::class, 'updateItemStatus'])->name('items.status');
+    });
+
+    // Scoped bindings resolve the review through the project, so a review of
+    // another project gives a 404 instead of being reachable by id.
+    Route::scopeBindings()->prefix('{project}/reviews')->name('projects.reviews.')->group(function () {
+        Route::get('/', [ReviewController::class, 'index'])->name('index');
+        Route::get('create', [ReviewController::class, 'create'])->name('create');
+        Route::post('/', [ReviewController::class, 'store'])->name('store');
+        Route::get('{review}', [ReviewController::class, 'show'])->name('show');
+        Route::get('{review}/edit', [ReviewController::class, 'edit'])->name('edit');
+        Route::patch('{review}', [ReviewController::class, 'update'])->name('update');
+        Route::patch('{review}/decision', [ReviewController::class, 'decide'])->name('decision');
     });
 });

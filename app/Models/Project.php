@@ -95,6 +95,19 @@ class Project extends Model
     }
 
     /**
+     * Get the reviews of the project.
+     *
+     * Named so a scoped route binding resolves a review only inside this
+     * project, and a review of another project gives a 404.
+     *
+     * @return HasMany<SprintReview, $this>
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(SprintReview::class);
+    }
+
+    /**
      * Determine whether the project is archived, and therefore read only.
      */
     public function isArchived(): bool
