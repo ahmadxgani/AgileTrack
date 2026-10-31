@@ -11,4 +11,11 @@ export type NavItem = {
     href: NonNullable<InertiaLinkProps['href']>;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    /**
+     * Path fragment that also marks the entry active. Used by the backlog
+     * link, whose own URL is a redirect: the pages it leads to live under
+     * /projects/{id}/backlog, so no single prefix covers them without also
+     * covering the project pages.
+     */
+    match?: string;
 };

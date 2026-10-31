@@ -189,30 +189,51 @@ export default function BacklogItemForm({
                     </p>
                 )}
 
-                {members.map((member) => (
-                    <div key={member.id} className="flex items-center gap-2">
-                        <Checkbox
-                            id={`assignee-${member.id}`}
-                            checked={form.data.assignees.includes(member.id)}
-                            onCheckedChange={(checked) =>
-                                toggleAssignee(member.id, checked === true)
-                            }
-                        />
-                        <Label
-                            htmlFor={`assignee-${member.id}`}
-                            className="font-normal"
-                        >
-                            {member.name}
-                        </Label>
-                    </div>
-                ))}
+                {members.map((member) => {
+                    // The server keys an assignee rejection by its position in
+                    // the submitted list, so the slot follows the same index.
+                    const index = form.data.assignees.indexOf(member.id);
+                    const error =
+                        index === -1
+                            ? undefined
+                            : form.errors[`assignees.${index}`];
 
-                <InputError message={form.errors.assignees} />
-                {Object.entries(form.errors)
-                    .filter(([key]) => key.startsWith('assignees.'))
-                    .map(([key, message]) => (
-                        <InputError key={key} message={message} />
-                    ))}
+                    return (
+                        <div
+                            key={member.id}
+                            className="flex items-center gap-2"
+                        >
+                            <Checkbox
+                                id={`assignee-${member.id}`}
+                                checked={index !== -1}
+                                onCheckedChange={(checked) =>
+                                    toggleAssignee(member.id, checked === true)
+                                }
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={
+                                    error
+                                        ? `assignee-${member.id}-error`
+                                        : undefined
+                                }
+                            />
+                            <Label
+                                htmlFor={`assignee-${member.id}`}
+                                className="font-normal"
+                            >
+                                {member.name}
+                            </Label>
+                            <InputError
+                                id={`assignee-${member.id}-error`}
+                                message={error}
+                            />
+                        </div>
+                    );
+                })}
+
+                <InputError
+                    id="assignees-error"
+                    message={form.errors.assignees}
+                />
             </fieldset>
 
             <Button disabled={form.processing}>

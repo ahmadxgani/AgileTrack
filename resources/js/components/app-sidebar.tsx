@@ -41,6 +41,7 @@ const mainNavItems: NavItem[] = [
         title: 'Backlog',
         href: backlogShortcut(),
         icon: ListChecks,
+        match: '/backlog',
     },
 ];
 
