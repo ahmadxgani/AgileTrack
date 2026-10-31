@@ -12,24 +12,47 @@ Inertia 3 + React 19 + TypeScript + Tailwind 4, with Fortify authentication.
 
 ## Install
 
+From a clean checkout, on SQLite (the default in `.env.example`):
+
 ```bash
 composer install
 cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite
-php artisan migrate
-php artisan db:seed
+php artisan migrate:fresh --seed
 npm install
 npm run build
+php artisan serve        # http://127.0.0.1:8000
 ```
 
-`php artisan db:seed` creates the local demo administrator
-`test@example.com` / `password` from
-`database/seeders/DatabaseSeeder.php`. That account is for development only,
-must never be seeded in production (the seeder returns early when
-`APP_ENV=production`), and is the only way to reach the user management pages
-at `/admin/users`: there is no public registration, so administrators create
-every other account from there.
+For front-end work, run `composer run dev` instead of the serve and build
+steps; it starts PHP, the Vite dev server and the queue listener together.
+
+`php artisan migrate:fresh --seed` (or `php artisan db:seed` on an
+already-migrated database) fills a local demo from
+`database/seeders/DatabaseSeeder.php`. Every demo account uses the password
+`password` (`DatabaseSeeder::DEMO_PASSWORD`, a development-only constant). The
+seeder returns immediately when `APP_ENV=production`, so no demo account or
+demo record ever reaches a production database.
+
+| Account                 | Roles            | Project role               |
+| ----------------------- | ---------------- | -------------------------- |
+| `test@example.com`      | Administrator    | none (sees every project)  |
+| `manager@example.com`   | Project Manager  | manager of AgileTrack Demo |
+| `developer@example.com` | Team Member      | member                     |
+| `qa@example.com`        | QA Engineer      | member                     |
+| `analyst@example.com`   | Business Analyst | member                     |
+| `owner@example.com`     | Owner / Sponsor  | viewer                     |
+| `customer@example.com`  | Customer         | viewer                     |
+
+The demo project "AgileTrack Demo" holds a closed sprint of finished work, an
+active sprint with cards in every Kanban column, an approved sprint review and
+a needs-changes review. Three items sit unplanned in the backlog pool: two
+seeded directly and the follow-up item the needs-changes review files.
+
+There is no public registration, so administrators create every other account
+from `/admin/users`; the seeded administrator is the one way in on a fresh
+clone.
 
 ## Development
 
@@ -45,8 +68,29 @@ Serves the app at http://localhost:8000 with the Vite dev server attached.
 php artisan test            # backend test suite
 npm run types:check         # TypeScript
 npm run check               # lint and format check
+npm run build               # production asset build
 composer ci:check           # lint, type check, tests
 ```
+
+## Feature status
+
+The implemented workflows are sign in, account administration, projects and
+memberships, backlog items with priorities and assignees, sprints and the
+Kanban board, sprint reviews with decisions and follow-up items, and the
+dashboard summary. Every one of them is covered by tests; see
+[`docs/requirements-traceability.md`](docs/requirements-traceability.md) for
+the FR/NFR mapping and the test files that prove each item.
+
+Not implemented yet, and deliberately not shown as fake buttons in the UI:
+
+- Benefits tracker, KPI and realisation (FR-16 to FR-18)
+- Burndown and velocity charts (FR-10, FR-11), release history (FR-12)
+- Reports and export (FR-20, FR-21), CSV import (FR-25)
+- Notifications (FR-22, FR-23), general item comments (FR-24)
+- User-facing configuration screens (FR-26), broad audit log (FR-27)
+- Backup, recovery, availability target, performance target, incident
+  recording (FR-28, NFR-04 to NFR-06, NFR-14)
+- Indonesian UI (NFR-10) and a supported browser list (NFR-09)
 
 ## Database
 
@@ -83,3 +127,9 @@ administrator cannot deactivate the last active administrator.
 
 Password reset email in development goes to the log
 (`MAIL_MAILER=log`); check `storage/logs/laravel.log` for the reset link.
+
+## Repository hygiene
+
+`.env`, `vendor/`, `node_modules/`, `public/build/`, `storage/*.key` and the
+SQLite file are ignored, so no secret and no build artifact is tracked. Only
+`.env.example` is committed, and it holds placeholders, not values.
