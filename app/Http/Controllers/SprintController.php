@@ -14,6 +14,7 @@ use App\Models\Sprint;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -23,6 +24,28 @@ use Inertia\Response;
 
 class SprintController extends Controller
 {
+    /**
+     * Open the sprints of a readable project from the sidebar.
+     *
+     * The sidebar has no project in its URL, so this picks the first
+     * visible one and falls back to the project list when there is none.
+     */
+    public function shortcut(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null, 403);
+
+        $project = Project::query()
+            ->visibleTo($user)
+            ->orderBy('name')
+            ->first();
+
+        return $project === null
+            ? to_route('projects.index')
+            : to_route('sprints.index', $project);
+    }
+
     /**
      * List the sprints of the project.
      */

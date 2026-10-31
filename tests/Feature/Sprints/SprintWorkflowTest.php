@@ -541,6 +541,20 @@ class SprintWorkflowTest extends TestCase
         $this->assertSame($sprint->id, $item->fresh()?->sprint_id);
     }
 
+    public function test_the_sidebar_shortcut_opens_a_readable_project(): void
+    {
+        $project = Project::factory()->create(['name' => 'Alpha']);
+        $manager = $this->member($project, ProjectRole::Manager);
+
+        $this->actingAs($manager)->get(route('sprints.shortcut'))
+            ->assertRedirect(route('sprints.index', $project));
+
+        $stranger = User::factory()->create();
+
+        $this->actingAs($stranger)->get(route('sprints.shortcut'))
+            ->assertRedirect(route('projects.index'));
+    }
+
     private function member(Project $project, ProjectRole $role): User
     {
         $user = User::factory()->create();

@@ -29,6 +29,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { index as backlogIndex } from '@/routes/projects/backlog';
+import { index as sprintsIndex } from '@/routes/sprints';
 import { archive, edit as editRoute, index, show } from '@/routes/projects';
 import { destroy, store, update } from '@/routes/projects/members';
 
@@ -142,6 +143,10 @@ export default function ProjectsShow({ project, roles, can }: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={sprintsIndex(project.id)}>Sprints</Link>
+                        </Button>
+
                         <Button variant="outline" asChild>
                             <Link href={backlogIndex(project.id)}>Backlog</Link>
                         </Button>

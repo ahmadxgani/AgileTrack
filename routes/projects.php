@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified'])->prefix('projects')->group(function () {
     // Sidebar entry, registered before {project} so the literal never binds
     // as a project id.
     Route::get('backlog', [BacklogItemController::class, 'shortcut'])->name('projects.backlog.shortcut');
+    Route::get('sprints', [SprintController::class, 'shortcut'])->name('sprints.shortcut');
     Route::get('{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::get('{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit');
     Route::patch('{project}', [ProjectController::class, 'update'])->name('projects.update');

@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
+    CalendarRange,
     FolderGit2,
     FolderKanban,
     LayoutGrid,
@@ -24,6 +25,7 @@ import { dashboard } from '@/routes';
 import { index as adminUsers } from '@/routes/admin/users';
 import { index as projects } from '@/routes/projects';
 import { shortcut as backlogShortcut } from '@/routes/projects/backlog';
+import { shortcut as sprintsShortcut } from '@/routes/sprints';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -42,6 +44,12 @@ const mainNavItems: NavItem[] = [
         href: backlogShortcut(),
         icon: ListChecks,
         match: '/backlog',
+    },
+    {
+        title: 'Sprints',
+        href: sprintsShortcut(),
+        icon: CalendarRange,
+        match: '/sprints',
     },
 ];
 
