@@ -168,7 +168,7 @@ deployment and operations plan.
 
 | ID | Requirement | Status | Evidence |
 | --- | --- | --- | --- |
-| NFR-01 | Access control and privacy | Implemented | Policy tests across `tests/Feature/Projects`, `Backlog`, `Sprints`, `Reviews`, `Admin`; scoped route bindings (`scopeBindings()` + cross-project 404 tests) |
+| NFR-01 | Access control and privacy | Implemented | Policy tests across `tests/Feature/Projects`, `tests/Feature/Backlog`, `tests/Feature/Sprints`, `tests/Feature/Reviews` and `tests/Feature/Admin`; scoped route bindings (`scopeBindings()` + cross-project 404 tests) |
 | NFR-02 | Credential storage | Implemented | Framework password hash (`password` is a `hashed` cast, never stored as typed); the model hides `password` and both two-factor columns from every serialized payload (`#[Hidden]`), and the account forms use a masked password input. The demo password is a documented local-only constant; `UserManagementTest` asserts the stored value is not the entered text |
 | NFR-03 | Server-side authorization on every read and write | Implemented | Policies plus query scopes (`Project::visibleTo`), re-authorized on locked rows inside transactions (`KanbanWorkflowTest`, `SprintWorkflowTest`, `ReviewWorkflowTest` stale-state tests) |
 | NFR-04 | Performance targets | NOT YET IMPLEMENTED | No target number exists in the SRS; no claim is made. Query-count regression tests guard against N+1 (`DashboardSummaryTest`, `KanbanWorkflowTest`) |
@@ -205,6 +205,8 @@ deployment and operations plan.
 | CSV import | FR-25 | Optional scope | Priority decision |
 | Admin configuration UI | FR-26 (user-facing) | Environment config suffices now | Later iteration |
 | Broad audit log | FR-27 (beyond status and decision history) | Only workflow history needed now | Later iteration |
+| Customer access | FR-13 to FR-15 (external) | Internal roles record reviews for now | External account flow decision |
+| Usability and responsiveness checks | NFR-07, NFR-08 | Manual desktop and small-screen pass only | Formal usability test |
 | Backup and recovery | FR-28, NFR-06 | Operational, not application code | Deployment plan |
 | Availability target | NFR-05 | Needs hosting agreement | Provider agreement |
 | Performance target | NFR-04 | No number in the SRS | Product owner target |

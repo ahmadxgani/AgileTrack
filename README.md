@@ -19,14 +19,15 @@ composer install
 cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite
-php artisan migrate:fresh --seed
+php artisan migrate:fresh --seed   # fresh checkout only; drops all tables
 npm install
 npm run build
 php artisan serve        # http://127.0.0.1:8000
 ```
 
 For front-end work, run `composer run dev` instead of the serve and build
-steps; it starts PHP, the Vite dev server and the queue listener together.
+steps; it runs the PHP server, the queue listener, the log viewer and the
+Vite dev server together.
 
 `php artisan migrate:fresh --seed` (or `php artisan db:seed` on an
 already-migrated database) fills a local demo from
