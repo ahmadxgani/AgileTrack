@@ -1,24 +1,16 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import {
+    CalendarClock,
+    CircleDashed,
+    CircleDot,
+    FolderKanban,
+} from 'lucide-react';
+import ProjectCard from '@/components/dashboard/project-card';
+import StatCard from '@/components/dashboard/stat-card';
 import Heading from '@/components/heading';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { dashboard } from '@/routes';
-import { show as projectShow } from '@/routes/projects';
-import { index as reviewsIndex } from '@/routes/projects/reviews';
+import { index as projectsIndex } from '@/routes/projects';
 
 export type DashboardProject = {
     id: number;
@@ -36,120 +28,113 @@ type Props = {
     summary: { projects: number };
 };
 
-function formatDate(value: string | null): string {
-    if (!value) {
-        return 'None scheduled';
+function greeting(): string {
+    const hour = new Date().getHours();
+
+    if (hour < 12) {
+        return 'Good morning';
     }
 
-    return new Date(value).toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    });
+    if (hour < 18) {
+        return 'Good afternoon';
+    }
+
+    return 'Good evening';
 }
 
 export default function Dashboard({ projects, summary }: Props) {
+    const { auth } = usePage().props;
+
+    const totals = projects.reduce(
+        (sum, project) => ({
+            todo: sum.todo + project.counts.todo,
+            in_progress: sum.in_progress + project.counts.in_progress,
+            done: sum.done + project.counts.done,
+        }),
+        { todo: 0, in_progress: 0, done: 0 },
+    );
+    const activeSprints = projects.filter((p) => p.active_sprint).length;
+    const upcomingReviews = projects.filter((p) => p.next_review_at).length;
+    const firstName = auth.user.name.split(' ')[0];
+
     return (
         <>
             <Head title="Dashboard" />
 
-            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
                 <Heading
-                    title="Dashboard"
-                    description={`${summary.projects} ${summary.projects === 1 ? 'project' : 'projects'} you can see`}
+                    title={`${greeting()}, ${firstName}`}
+                    description={
+                        summary.projects === 0
+                            ? 'You are not a member of any project yet.'
+                            : `Here is where your ${summary.projects === 1 ? 'project stands' : `${summary.projects} projects stand`} today.`
+                    }
                 />
 
-                {projects.length === 0 ? (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>No projects yet</CardTitle>
-                            <CardDescription>
-                                You are not a member of any project yet. Ask a
-                                project manager to add you.
-                            </CardDescription>
-                        </CardHeader>
-                    </Card>
-                ) : (
-                    <div className="rounded-xl border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Project</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Active sprint</TableHead>
-                                    <TableHead className="text-right">
-                                        To do
-                                    </TableHead>
-                                    <TableHead className="text-right">
-                                        In progress
-                                    </TableHead>
-                                    <TableHead className="text-right">
-                                        Done
-                                    </TableHead>
-                                    <TableHead>Next review</TableHead>
-                                    <TableHead />
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {projects.map((project) => (
-                                    <TableRow key={project.id}>
-                                        <TableCell className="font-medium">
-                                            <Link
-                                                href={projectShow(project.id)}
-                                                className="hover:underline"
-                                            >
-                                                {project.name}
-                                            </Link>
-                                            {project.archived_at && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="ml-2"
-                                                >
-                                                    Archived
-                                                </Badge>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="secondary">
-                                                {project.status_label}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            {project.active_sprint ??
-                                                'No active sprint'}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {project.counts.todo}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {project.counts.in_progress}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {project.counts.done}
-                                        </TableCell>
-                                        <TableCell>
-                                            {formatDate(project.next_review_at)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={reviewsIndex(
-                                                        project.id,
-                                                    )}
-                                                >
-                                                    Reviews
-                                                </Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <StatCard
+                        label="Projects"
+                        value={summary.projects}
+                        hint={`${activeSprints} with an active sprint`}
+                        icon={FolderKanban}
+                        tone="primary"
+                    />
+                    <StatCard
+                        label="To do"
+                        value={totals.todo}
+                        hint="Open items across your projects"
+                        icon={CircleDashed}
+                    />
+                    <StatCard
+                        label="In progress"
+                        value={totals.in_progress}
+                        hint="Being worked on right now"
+                        icon={CircleDot}
+                        tone="accent"
+                    />
+                    <StatCard
+                        label="Upcoming reviews"
+                        value={upcomingReviews}
+                        hint="Projects with a review scheduled"
+                        icon={CalendarClock}
+                    />
+                </div>
+
+                <section className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <h3 className="font-display text-lg font-semibold">
+                            Your projects
+                        </h3>
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link href={projectsIndex()}>View all</Link>
+                        </Button>
                     </div>
-                )}
+
+                    {projects.length === 0 ? (
+                        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed bg-card/50 px-6 py-16 text-center">
+                            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                <FolderKanban className="size-6" />
+                            </span>
+                            <p className="font-display text-base font-semibold">
+                                No projects yet
+                            </p>
+                            <p className="max-w-sm text-sm text-muted-foreground">
+                                Ask a project manager to add you to a project
+                                and it will show up here with its sprint and
+                                review status.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {projects.map((project) => (
+                                <ProjectCard
+                                    key={project.id}
+                                    project={project}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </section>
             </div>
         </>
     );
