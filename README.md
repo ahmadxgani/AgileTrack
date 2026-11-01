@@ -115,6 +115,41 @@ DB_PASSWORD=change-me
 
 Then run `php artisan migrate --force`.
 
+### Existing EC2 deployment
+
+The production host is already provisioned with nginx, PHP-FPM, PostgreSQL,
+a shared production `.env`, persistent storage, and a `current` release
+symlink. Deploy a clean, committed revision from the repository root:
+
+```bash
+scripts/deploy-ec2.sh
+```
+
+The script runs `composer ci:check`, builds the frontend, packages committed
+source plus the generated assets, and uploads the release over SSH using
+`~/.ssh/yuki`. On EC2 it snapshots PostgreSQL, installs locked production
+dependencies, runs additive migrations (never `migrate:fresh` or seeds),
+activates the release, and checks `/up` and `/login`. A failed health check
+restores the previous symlink. Database migrations are not automatically
+reversed; inspect and restore deliberately if a migration needs recovery.
+
+For local checks without connecting to EC2:
+
+```bash
+DEPLOY_DRY_RUN=1 scripts/deploy-ec2.sh
+```
+
+The worktree must be clean for both deploy and dry-run. Do not commit
+`.env`, database files, or local secrets. The initial production
+administrator credential is not re-created by deploys. The script defaults
+to the provisioned host and `/var/www/agiletrack` layout. Explicit
+`DEPLOY_HOST_OVERRIDE`, `DEPLOY_USER_OVERRIDE`, or `DEPLOY_KEY_OVERRIDE`
+variables can target a compatible host whose SSH host key is already
+trusted in `~/.ssh/known_hosts`. Set `DEPLOY_RUN_CHECKS=0` only if CI checks already ran for the
+exact commit. The script keeps the latest five releases and seven database
+snapshots by default; tune with
+`DEPLOY_KEEP_RELEASES` and `DEPLOY_KEEP_DB_BACKUPS`.
+
 ## Authentication
 
 Public registration is disabled, so nobody can create an account from the
