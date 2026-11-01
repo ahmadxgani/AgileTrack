@@ -244,7 +244,10 @@ rollback() {
         if sudo -n systemctl cat agiletrack-worker.service >/dev/null 2>&1; then
             sudo -n systemctl restart agiletrack-worker.service
         fi
-    elif (( release_created )); then
+    fi
+    # A release that never passed its health check must not linger as a
+    # rollback candidate or take a retention slot.
+    if (( release_created )); then
         sudo -n rm -rf -- "$release"
     fi
     echo "Deployment failed with status $status. Database migrations are not automatically rolled back." >&2
@@ -321,7 +324,6 @@ tar --no-same-owner -xzf "$archive" -C "$release"
 # paths without following or modifying shared production data.
 sudo -n rm -rf -- "$release/storage" "$release/public/storage"
 sudo -n chown -R ec2-user:apache "$release"
-release_created=0
 
 ln -s "$base/shared/storage" "$release/storage"
 ln -s "$base/shared/.env" "$release/.env"
@@ -392,12 +394,12 @@ fi
 curl --fail --silent --show-error --max-time 30 \
     --cacert "$expected_cert" \
     --resolve "$domain:443:127.0.0.1" \
-    "https://$domain/up" --output "$scratch-health.html"
+    "https://$domain/up" --output "$scratch/health.html"
 curl --fail --silent --show-error --max-time 30 \
     --cacert "$expected_cert" \
     --resolve "$domain:443:127.0.0.1" \
-    "https://$domain/login" --output "$scratch-login.html"
-grep -q 'data-page="app"' "$scratch-login.html"
+    "https://$domain/login" --output "$scratch/login.html"
+grep -q 'data-page="app"' "$scratch/login.html"
 
 sudo -n systemctl is-active --quiet nginx php-fpm postgresql
 if sudo -n systemctl cat agiletrack-worker.service >/dev/null 2>&1; then
