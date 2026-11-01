@@ -288,11 +288,13 @@ esac
 for command in stat grep nginx php composer flock curl pg_dump pg_restore tee; do
     command -v "$command" >/dev/null 2>&1 || { echo "Required remote command not found: $command" >&2; exit 1; }
 done
-grep -Fq "server_name $domain;" "$nginx_conf" || {
+# The vhost aligns its values in columns, so allow any run of whitespace.
+domain_pattern=${domain//./\\.}
+grep -Eq "^[[:space:]]*server_name[[:space:]]+$domain_pattern[[:space:]]*;" "$nginx_conf" || {
     echo "Expected nginx vhost does not declare server_name $domain." >&2
     exit 1
 }
-grep -Fq "root         $current/public;" "$nginx_conf" || {
+grep -Eq "^[[:space:]]*root[[:space:]]+$current/public[[:space:]]*;" "$nginx_conf" || {
     echo 'Nginx vhost is not configured to serve the expected current/public path.' >&2
     exit 1
 }
