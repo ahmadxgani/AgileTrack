@@ -22,7 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             EnsureUserIsActive::class,
-            AddLinkHeadersForPreloadedAssets::class,
+            // Keep the Link header inside nginx's 4 KB FastCGI header buffer;
+            // the first entries are the fonts, the stylesheet and the entry
+            // chunk, and the page's own preload tags cover the rest.
+            AddLinkHeadersForPreloadedAssets::using(limit: 8),
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
