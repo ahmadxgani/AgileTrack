@@ -16,7 +16,7 @@ export default function ReviewsCreate({ project, sprints }: Props) {
         <>
             <Head title={`New review - ${project.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <div className="space-y-2">
                     <Heading
                         title="Schedule a review"

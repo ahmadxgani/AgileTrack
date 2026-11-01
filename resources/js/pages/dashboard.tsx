@@ -52,7 +52,7 @@ export default function Dashboard({ projects, summary }: Props) {
         <>
             <Head title="Dashboard" />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title="Dashboard"
                     description={`${summary.projects} ${summary.projects === 1 ? 'project' : 'projects'} you can see`}

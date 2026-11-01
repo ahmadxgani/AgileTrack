@@ -21,7 +21,7 @@ export default function ProjectsEdit({ project, statuses }: Props) {
         <>
             <Head title={`Edit ${project.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title={`Edit ${project.name}`}
                     description="Update the plan for this project"

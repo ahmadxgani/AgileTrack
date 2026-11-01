@@ -22,7 +22,7 @@ export default function BacklogCreate({
         <>
             <Head title={`New backlog item - ${project.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title="New backlog item"
                     description={`Add work to the ${project.name} backlog`}

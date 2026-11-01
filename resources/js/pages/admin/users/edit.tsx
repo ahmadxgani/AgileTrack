@@ -59,7 +59,7 @@ export default function UsersEdit({ user, roles, passwordRules }: Props) {
         <>
             <Head title={`Edit ${user.name}`} />
 
-            <div className="max-w-xl space-y-6 p-4">
+            <div className="w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <div className="space-y-2">
                     <Heading
                         title="Edit account"

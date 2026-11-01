@@ -80,7 +80,7 @@ export default function ReviewsShow({
         <>
             <Head title={`Review - ${project.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
                         <Heading

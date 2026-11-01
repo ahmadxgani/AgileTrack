@@ -43,7 +43,7 @@ export default function UsersCreate({ roles, passwordRules }: Props) {
         <>
             <Head title="New account" />
 
-            <div className="max-w-xl space-y-6 p-4">
+            <div className="w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title="New account"
                     description="Create an account with an initial password and one or more roles"

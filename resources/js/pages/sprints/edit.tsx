@@ -21,7 +21,7 @@ export default function SprintsEdit({ project, sprint }: Props) {
         <>
             <Head title={`Edit ${sprint.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title={`Edit ${sprint.name}`}
                     description={`Update this sprint of ${project.name}`}

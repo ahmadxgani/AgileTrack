@@ -14,7 +14,7 @@ export default function SprintsCreate({ project }: Props) {
         <>
             <Head title={`New sprint - ${project.name}`} />
 
-            <div className="space-y-6 p-4">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
                 <Heading
                     title="New sprint"
                     description={`Plan a time box for ${project.name}`}
