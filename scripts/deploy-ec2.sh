@@ -126,8 +126,11 @@ mkdir -p "$SCRATCH/generated/resources/js" "$SCRATCH/generated/public"
 cp -a "$BUILD_ROOT/resources/js/actions" "$SCRATCH/generated/resources/js/"
 cp -a "$BUILD_ROOT/resources/js/routes" "$SCRATCH/generated/resources/js/"
 cp -a "$BUILD_ROOT/public/build" "$SCRATCH/generated/public/"
+# The release directory name carries a prefix of this hash; the remote side
+# checks the two against each other before and after activation.
+printf '%s\n' "$REVISION" > "$SCRATCH/generated/REVISION"
 chmod -R u+w "$SCRATCH/generated"
-tar -rf "$SCRATCH/source.tar" -C "$SCRATCH/generated" resources/js/actions resources/js/routes public/build
+tar -rf "$SCRATCH/source.tar" -C "$SCRATCH/generated" REVISION resources/js/actions resources/js/routes public/build
 gzip -c "$SCRATCH/source.tar" > "$ARCHIVE"
 (
     cd "$SCRATCH"
@@ -150,6 +153,8 @@ with tarfile.open(sys.argv[1]) as archive:
     ]
     if unsafe:
         raise SystemExit(f'Release contains unsafe paths, links, or special files: {unsafe}')
+    if 'REVISION' not in names:
+        raise SystemExit('Release is missing the REVISION marker')
     if 'public/build/manifest.json' not in names:
         raise SystemExit('Release is missing public/build/manifest.json')
     if not any(name.startswith('resources/js/actions/') for name in names):
@@ -210,6 +215,17 @@ old_target=''
 activated=0
 release_created=0
 
+# A release directory is named <timestamp>-<hash prefix>, and its REVISION
+# file holds the full commit hash, so compare the prefix against the hash.
+check_revision_marker() {
+    local release_name=$1 marker=$2 revision
+    [[ -f "$marker" ]] || return 0
+    revision=$(tr -d '[:space:]' < "$marker")
+    [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Revision marker is not a commit hash: $marker" >&2; return 1; }
+    [[ "$release_name" == *-* ]] || { echo "Release name has no revision suffix: $release_name" >&2; return 1; }
+    [[ "$revision" == "${release_name##*-}"* ]] || { echo "Release $release_name does not match its revision marker $revision." >&2; return 1; }
+}
+
 rollback() {
     status=$?
     trap - ERR
@@ -260,10 +276,7 @@ case "$current_target" in
 esac
 [[ "$current_target" == "$expected_current" ]] || { echo 'Remote current release changed during upload; refusing stale deployment.' >&2; exit 1; }
 [[ -d "$base/$current_target" ]] || { echo 'Current release target is missing.' >&2; exit 1; }
-if [[ -f "$base/current/REVISION" ]]; then
-    current_revision=$(cat "$base/current/REVISION")
-    [[ "${current_target##*/}" == "$current_revision" ]] || { echo 'Current release symlink does not match its revision marker.' >&2; exit 1; }
-fi
+check_revision_marker "${current_target##*/}" "$base/current/REVISION"
 nginx_conf=/etc/nginx/conf.d/$domain.conf
 case "$domain" in
     agiletrack.reyuki.site) expected_cert=/etc/nginx/ssl/agiletrack.crt ;;
@@ -294,10 +307,7 @@ case "$old_target" in
     releases/*) ;;
     *) echo "Current symlink points outside the releases directory: $old_target" >&2; exit 1 ;;
 esac
-if [[ -f "$current/REVISION" ]]; then
-    current_revision=$(cat "$current/REVISION")
-    [[ "$current_revision" == "${old_target##*/}" ]] || { echo 'Current release symlink does not match its revision marker.' >&2; exit 1; }
-fi
+check_revision_marker "${old_target##*/}" "$current/REVISION"
 [[ "$old_target" != *..* && -d "$base/$old_target" ]] || { echo 'Current release target is invalid.' >&2; exit 1; }
 
 sudo -n install -d -o root -g root -m 0700 "$backup_dir"
@@ -364,10 +374,8 @@ case "$old_target" in
     *) echo "Current symlink points outside the releases directory: $old_target" >&2; exit 1 ;;
 esac
 [[ "$old_target" != *..* && -d "$base/$old_target" ]] || { echo 'Current release target is invalid.' >&2; exit 1; }
-if [[ -f "$current/REVISION" ]]; then
-    current_revision=$(cat "$current/REVISION")
-    [[ "$current_revision" == "${old_target##*/}" ]] || { echo 'Current release symlink does not match its revision marker.' >&2; exit 1; }
-fi
+check_revision_marker "${old_target##*/}" "$current/REVISION"
+check_revision_marker "$release_id" "$release/REVISION"
 
 trap rollback ERR
 sudo -n rm -f -- "$base/.current-$release_id"
